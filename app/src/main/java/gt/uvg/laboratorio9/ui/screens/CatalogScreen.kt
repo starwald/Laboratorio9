@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,7 +27,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import gt.uvg.laboratorio9.model.Product
+import gt.uvg.laboratorio9.ui.components.ProductImage
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.LaunchedEffect
 
 @Composable
 fun CatalogScreen(
@@ -34,13 +37,19 @@ fun CatalogScreen(
     favoriteProductIds: Set<Int>,
     gridState: LazyGridState,
     searchQuery: String,
+    orderUnitCount: Int,
     onSearchQueryChange: (String) -> Unit,
+    onOrderClick: () -> Unit,
     onProductClick: (Int) -> Unit,
     onFavoriteClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
 
     val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(searchQuery) {
+        gridState.scrollToItem(0)
+    }
 
     val cleanQuery = searchQuery.trim()
 
@@ -78,6 +87,16 @@ fun CatalogScreen(
                 text = "Cafés de Guatemala",
                 fontSize = 16.sp
             )
+
+            Button(
+                onClick = onOrderClick
+            ) {
+
+                Text(
+                    text = "Pedido ($orderUnitCount)"
+                )
+
+            }
 
             Spacer(
                 modifier = Modifier.height(12.dp)
@@ -237,6 +256,17 @@ private fun ProductCard(
             .padding(8.dp)
     ) {
 
+        ProductImage(
+            imageUrl = product.imageUrl,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+        )
+
+        Spacer(
+            modifier = Modifier.height(8.dp)
+        )
+
         Text(
             text = product.name,
             fontSize = 18.sp,
@@ -253,7 +283,7 @@ private fun ProductCard(
         )
 
         Text(
-            text = "Q${product.price}",
+            text = "Q%.2f".format(product.price),
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold
         )
