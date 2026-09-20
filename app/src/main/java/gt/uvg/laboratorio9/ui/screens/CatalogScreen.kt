@@ -1,98 +1,207 @@
 package gt.uvg.laboratorio9.ui.screens
 
 import android.util.Log
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import gt.uvg.laboratorio9.model.Product
+import kotlinx.coroutines.launch
 
 @Composable
 fun CatalogScreen(
     products: List<Product>,
     favoriteProductIds: Set<Int>,
+    gridState: LazyGridState,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     onProductClick: (Int) -> Unit,
     onFavoriteClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
 
-    Column(
+    val coroutineScope = rememberCoroutineScope()
+
+    val cleanQuery = searchQuery.trim()
+
+    val filteredProducts = products.filter { product ->
+
+        product.name.contains(
+            cleanQuery,
+            ignoreCase = true
+        )
+
+    }
+
+    val showBackToTop =
+        gridState.firstVisibleItemIndex > 0
+
+    Box(
         modifier = modifier
+            .fillMaxSize()
             .safeDrawingPadding()
-            .padding(16.dp)
     ) {
 
-        Text(
-            text = "Cafetería",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
 
-        Text(
-            text = "Cafés de Guatemala",
-            fontSize = 16.sp
-        )
+            Text(
+                text = "Cafetería",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold
+            )
 
-        Text(
-            text = "${products.size} productos",
-            fontSize = 14.sp
-        )
+            Text(
+                text = "Cafés de Guatemala",
+                fontSize = 16.sp
+            )
 
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
+            Spacer(
+                modifier = Modifier.height(12.dp)
+            )
 
-        products
-            .chunked(2)
-            .forEach { rowProducts ->
+            OutlinedTextField(
+                value = searchQuery,
 
-                Row(
-                    modifier = Modifier.fillMaxWidth()
+                onValueChange = {
+                    onSearchQueryChange(it)
+                },
+
+                label = {
+                    Text("Buscar producto")
+                },
+
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(
+                modifier = Modifier.height(8.dp)
+            )
+
+            Text(
+                text = "${filteredProducts.size} de ${products.size} productos",
+                fontSize = 14.sp
+            )
+
+            Spacer(
+                modifier = Modifier.height(12.dp)
+            )
+
+            if (filteredProducts.isEmpty()) {
+
+                Text(
+                    text = "No encontramos productos",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
+
+                Text(
+                    text = "Intenta con otro nombre de café."
+                )
+
+                Spacer(
+                    modifier = Modifier.height(12.dp)
+                )
+
+                Button(
+                    onClick = {
+                        onSearchQueryChange("")
+                    }
                 ) {
 
-                    rowProducts.forEach { product ->
+                    Text("Limpiar búsqueda")
+
+                }
+
+            } else {
+
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    state = gridState,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+
+                    items(
+                        items = filteredProducts,
+
+                        key = { product ->
+                            product.id
+                        }
+                    ) { product ->
 
                         ProductCard(
                             product = product,
-                            isFavorite = product.id in favoriteProductIds,
-                            onProductClick = onProductClick,
-                            onFavoriteClick = onFavoriteClick,
-                            modifier = Modifier.weight(1f)
-                        )
 
-                    }
+                            isFavorite =
+                                product.id in favoriteProductIds,
 
-                    if (rowProducts.size == 1) {
+                            onProductClick =
+                                onProductClick,
 
-                        Spacer(
-                            modifier = Modifier.weight(1f)
+                            onFavoriteClick =
+                                onFavoriteClick
                         )
 
                     }
 
                 }
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+            }
+
+        }
+
+        if (showBackToTop) {
+
+            Button(
+                onClick = {
+
+                    coroutineScope.launch {
+
+                        gridState.animateScrollToItem(0)
+
+                    }
+
+                },
+
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
+            ) {
+
+                Text("↑ Volver arriba")
 
             }
 
-    }
+        }
 
+    }
 }
 
 @Composable
@@ -123,7 +232,9 @@ private fun ProductCard(
     }
 
     Column(
-        modifier = modifier.padding(8.dp)
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(8.dp)
     ) {
 
         Text(
@@ -149,16 +260,24 @@ private fun ProductCard(
 
         Text(
             text = if (product.stock == 0) {
+
                 "Agotado"
+
             } else {
+
                 "Stock: ${product.stock}"
+
             },
             fontSize = 14.sp
         )
 
         Button(
             onClick = {
-                onProductClick(product.id)
+
+                onProductClick(
+                    product.id
+                )
+
             }
         ) {
 
@@ -168,20 +287,27 @@ private fun ProductCard(
 
         TextButton(
             onClick = {
-                onFavoriteClick(product.id)
+
+                onFavoriteClick(
+                    product.id
+                )
+
             }
         ) {
 
             Text(
                 text = if (isFavorite) {
+
                     "♥ Favorito"
+
                 } else {
+
                     "♡ Favorito"
+
                 }
             )
 
         }
 
     }
-
 }
