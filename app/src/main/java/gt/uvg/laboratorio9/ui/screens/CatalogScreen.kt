@@ -1,5 +1,6 @@
 package gt.uvg.laboratorio9.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +13,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,11 +28,13 @@ fun CatalogScreen(
     onFavoriteClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+
     Column(
         modifier = modifier
             .safeDrawingPadding()
             .padding(16.dp)
     ) {
+
         Text(
             text = "Cafetería",
             fontSize = 28.sp,
@@ -42,58 +46,142 @@ fun CatalogScreen(
             fontSize = 16.sp
         )
 
+        Text(
+            text = "${products.size} productos",
+            fontSize = 14.sp
+        )
+
         Spacer(
             modifier = Modifier.height(16.dp)
         )
 
-        products.forEach { product ->
-            val isFavorite = product.id in favoriteProductIds
+        products
+            .chunked(2)
+            .forEach { rowProducts ->
 
-            Text(
-                text = product.name,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = product.description
-            )
-
-            Text(
-                text = "Q${product.price}",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Button(
-                    onClick = {
-                        onProductClick(product.id)
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Ver producto")
+
+                    rowProducts.forEach { product ->
+
+                        ProductCard(
+                            product = product,
+                            isFavorite = product.id in favoriteProductIds,
+                            onProductClick = onProductClick,
+                            onFavoriteClick = onFavoriteClick,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                    }
+
+                    if (rowProducts.size == 1) {
+
+                        Spacer(
+                            modifier = Modifier.weight(1f)
+                        )
+
+                    }
+
                 }
 
-                TextButton(
-                    onClick = {
-                        onFavoriteClick(product.id)
-                    }
-                ) {
-                    Text(
-                        text = if (isFavorite) {
-                            "♥ Favorito"
-                        } else {
-                            "♡ Favorito"
-                        }
-                    )
-                }
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+
             }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 16.dp)
-            )
-        }
     }
+
+}
+
+@Composable
+private fun ProductCard(
+    product: Product,
+    isFavorite: Boolean,
+    onProductClick: (Int) -> Unit,
+    onFavoriteClick: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+
+    DisposableEffect(product.id) {
+
+        Log.d(
+            "CatalogProbe",
+            "ENTER product=${product.id}"
+        )
+
+        onDispose {
+
+            Log.d(
+                "CatalogProbe",
+                "DISPOSE product=${product.id}"
+            )
+
+        }
+
+    }
+
+    Column(
+        modifier = modifier.padding(8.dp)
+    ) {
+
+        Text(
+            text = product.name,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Text(
+            text = product.description,
+            fontSize = 14.sp
+        )
+
+        Spacer(
+            modifier = Modifier.height(8.dp)
+        )
+
+        Text(
+            text = "Q${product.price}",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Text(
+            text = if (product.stock == 0) {
+                "Agotado"
+            } else {
+                "Stock: ${product.stock}"
+            },
+            fontSize = 14.sp
+        )
+
+        Button(
+            onClick = {
+                onProductClick(product.id)
+            }
+        ) {
+
+            Text("Ver producto")
+
+        }
+
+        TextButton(
+            onClick = {
+                onFavoriteClick(product.id)
+            }
+        ) {
+
+            Text(
+                text = if (isFavorite) {
+                    "♥ Favorito"
+                } else {
+                    "♡ Favorito"
+                }
+            )
+
+        }
+
+    }
+
 }
