@@ -2,6 +2,7 @@ package gt.uvg.laboratorio9.ui.screens
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,16 +20,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import gt.uvg.laboratorio9.model.Product
+import gt.uvg.laboratorio9.ui.components.ProductImage
 
 @Composable
 fun DetailScreen(
     product: Product,
     isFavorite: Boolean,
+    orderMessage: String?,
+    orderUnitCount: Int,
     onFavoriteClick: () -> Unit,
+    onAddToOrder: () -> Unit,
+    onOrderClick: () -> Unit,
     onProducerClick: (Int) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+
     var showTechnicalInfo by remember {
         mutableStateOf(false)
     }
@@ -38,11 +45,31 @@ fun DetailScreen(
             .safeDrawingPadding()
             .padding(16.dp)
     ) {
+
         TextButton(
             onClick = onBack
         ) {
+
             Text("← Regresar")
+
         }
+
+        Text(
+            text = product.name,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(
+            modifier = Modifier.height(16.dp)
+        )
+
+        ProductImage(
+            imageUrl = product.imageUrl,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1.5f)
+        )
 
         Spacer(
             modifier = Modifier.height(16.dp)
@@ -58,9 +85,21 @@ fun DetailScreen(
         )
 
         Text(
-            text = "Q${product.price}",
+            text = "Q%.2f".format(product.price),
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold
+        )
+
+        Text(
+            text = if (product.stock == 0) {
+
+                "Agotado"
+
+            } else {
+
+                "Stock: ${product.stock}"
+
+            }
         )
 
         Spacer(
@@ -68,15 +107,73 @@ fun DetailScreen(
         )
 
         Button(
-            onClick = onFavoriteClick
+            onClick = onAddToOrder,
+            enabled = product.stock > 0,
+            modifier = Modifier.fillMaxWidth()
         ) {
+
             Text(
-                text = if (isFavorite) {
-                    "♥ Quitar de favoritos"
+                text = if (product.stock == 0) {
+
+                    "Producto agotado"
+
                 } else {
-                    "♡ Agregar a favoritos"
+
+                    "Agregar al pedido"
+
                 }
             )
+
+        }
+
+        if (orderMessage != null) {
+
+            Spacer(
+                modifier = Modifier.height(8.dp)
+            )
+
+            Text(
+                text = orderMessage,
+                fontWeight = FontWeight.Bold
+            )
+
+        }
+
+        Spacer(
+            modifier = Modifier.height(8.dp)
+        )
+
+        Button(
+            onClick = onOrderClick,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+
+            Text(
+                text = "Ver pedido ($orderUnitCount)"
+            )
+
+        }
+
+        Spacer(
+            modifier = Modifier.height(8.dp)
+        )
+
+        Button(
+            onClick = onFavoriteClick
+        ) {
+
+            Text(
+                text = if (isFavorite) {
+
+                    "♥ Quitar de favoritos"
+
+                } else {
+
+                    "♡ Agregar a favoritos"
+
+                }
+            )
+
         }
 
         Spacer(
@@ -85,19 +182,29 @@ fun DetailScreen(
 
         Button(
             onClick = {
-                showTechnicalInfo = !showTechnicalInfo
+
+                showTechnicalInfo =
+                    !showTechnicalInfo
+
             }
         ) {
+
             Text(
                 text = if (showTechnicalInfo) {
+
                     "Ocultar ficha técnica"
+
                 } else {
+
                     "Ver ficha técnica"
+
                 }
             )
+
         }
 
         if (showTechnicalInfo) {
+
             Spacer(
                 modifier = Modifier.height(12.dp)
             )
@@ -118,6 +225,7 @@ fun DetailScreen(
             Text(
                 text = "Contenido: 1 libra"
             )
+
         }
 
         Spacer(
@@ -126,11 +234,19 @@ fun DetailScreen(
 
         Button(
             onClick = {
-                onProducerClick(product.producerId)
+
+                onProducerClick(
+                    product.producerId
+                )
+
             },
+
             modifier = Modifier.fillMaxWidth()
         ) {
+
             Text("Conocer productor")
+
         }
+
     }
 }
