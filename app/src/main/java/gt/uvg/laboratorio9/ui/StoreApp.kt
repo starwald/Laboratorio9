@@ -25,7 +25,8 @@ import gt.uvg.laboratorio9.ui.screens.DetailScreen
 import gt.uvg.laboratorio9.ui.screens.OrderScreen
 import gt.uvg.laboratorio9.ui.screens.ProfileScreen
 import gt.uvg.laboratorio9.viewmodel.StoreViewModel
-
+import gt.uvg.laboratorio9.navigation.ConfirmationKey
+import gt.uvg.laboratorio9.ui.screens.ConfirmationScreen
 @Composable
 fun StoreApp() {
 
@@ -36,6 +37,8 @@ fun StoreApp() {
 
     val checkoutUiState by
     storeViewModel.checkoutUiState.collectAsStateWithLifecycle()
+
+    val orderReceipt by storeViewModel.orderReceipt.collectAsStateWithLifecycle()
 
     val backStack = rememberNavBackStack(
         CatalogKey
@@ -275,10 +278,24 @@ fun StoreApp() {
                     onBusinessNameChange = storeViewModel::onBusinessNameChange,
                     onPaymentMethodChange = storeViewModel::onPaymentMethodChange,
 
-                    // Temporal: en el Paso 14 esto navega al recibo.
-                    onConfirmOrder = { storeViewModel.confirmOrder() },
+                    onConfirmOrder = {
+                        if (storeViewModel.confirmOrder()) {
+                            backStack.add(ConfirmationKey)
+                        }
+                    },
 
                     onBack = { backStack.removeLastOrNull() }
+                )
+            }
+
+            entry<ConfirmationKey> {
+                ConfirmationScreen(
+                    receipt = orderReceipt,
+                    onBackToCatalog = {
+                        while (backStack.size > 1) {
+                            backStack.removeLastOrNull()
+                        }
+                    }
                 )
             }
 
