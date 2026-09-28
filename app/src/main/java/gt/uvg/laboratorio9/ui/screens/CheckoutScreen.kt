@@ -25,12 +25,11 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import gt.uvg.laboratorio9.navigation.CheckoutKey
-import gt.uvg.laboratorio9.ui.screens.CheckoutScreen
 import gt.uvg.laboratorio9.model.OrderItem
 import gt.uvg.laboratorio9.model.Product
 import gt.uvg.laboratorio9.model.calculateOrderTotal
 import gt.uvg.laboratorio9.model.calculateSubtotal
+
 
 @Composable
 fun CheckoutScreen(
