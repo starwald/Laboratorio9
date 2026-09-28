@@ -8,6 +8,8 @@ fun calculateSubtotal(
     return product.price * quantity
 }
 
+
+
 fun calculateOrderTotal(
     orderItems: List<OrderItem>,
     products: List<Product>

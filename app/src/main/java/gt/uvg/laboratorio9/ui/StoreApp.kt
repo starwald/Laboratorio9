@@ -4,46 +4,57 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import gt.uvg.laboratorio9.navigation.CatalogKey
+import gt.uvg.laboratorio9.navigation.CheckoutKey
 import gt.uvg.laboratorio9.navigation.DetailKey
 import gt.uvg.laboratorio9.navigation.OrderKey
 import gt.uvg.laboratorio9.navigation.ProfileKey
 import gt.uvg.laboratorio9.ui.screens.CatalogScreen
+import gt.uvg.laboratorio9.ui.screens.CheckoutScreen
 import gt.uvg.laboratorio9.ui.screens.DetailScreen
 import gt.uvg.laboratorio9.ui.screens.OrderScreen
 import gt.uvg.laboratorio9.ui.screens.ProfileScreen
 import gt.uvg.laboratorio9.viewmodel.StoreViewModel
-
+import gt.uvg.laboratorio9.navigation.ConfirmationKey
+import gt.uvg.laboratorio9.ui.screens.ConfirmationScreen
 @Composable
 fun StoreApp() {
 
     val storeViewModel: StoreViewModel = viewModel()
 
-    val uiState by storeViewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by
+    storeViewModel.uiState.collectAsStateWithLifecycle()
+
+    val checkoutUiState by
+    storeViewModel.checkoutUiState.collectAsStateWithLifecycle()
+
+    val orderReceipt by storeViewModel.orderReceipt.collectAsStateWithLifecycle()
 
     val backStack = rememberNavBackStack(
         CatalogKey
     )
 
-    val catalogGridState = rememberLazyGridState()
+    val catalogGridState =
+        rememberLazyGridState()
 
     var searchQuery by rememberSaveable {
         mutableStateOf("")
     }
 
-    val orderUnitCount = uiState.orderItems.sumOf { item ->
-        item.quantity
-    }
+    val orderUnitCount =
+        uiState.orderItems.sumOf { item ->
+            item.quantity
+        }
 
     NavDisplay(
         backStack = backStack,
@@ -65,7 +76,6 @@ fun StoreApp() {
                     -width
                 }
             )
-
         },
 
         popTransitionSpec = {
@@ -79,16 +89,18 @@ fun StoreApp() {
                     width
                 }
             )
-
         },
 
         entryProvider = entryProvider {
+
+            // CATALOGO
 
             entry<CatalogKey> {
 
                 CatalogScreen(
                     products = uiState.products,
-                    favoriteProductIds = uiState.favoriteProductIds,
+                    favoriteProductIds =
+                        uiState.favoriteProductIds,
                     gridState = catalogGridState,
                     searchQuery = searchQuery,
                     orderUnitCount = orderUnitCount,
@@ -98,6 +110,7 @@ fun StoreApp() {
                     },
 
                     onOrderClick = {
+
                         backStack.add(
                             OrderKey
                         )
@@ -123,11 +136,15 @@ fun StoreApp() {
                 )
             }
 
+            // DETALLE
+
+
             entry<DetailKey> { key ->
 
-                val product = storeViewModel.getProductById(
-                    key.productId
-                )
+                val product =
+                    storeViewModel.getProductById(
+                        key.productId
+                    )
 
                 if (product != null) {
 
@@ -135,11 +152,14 @@ fun StoreApp() {
                         product = product,
 
                         isFavorite =
-                            product.id in uiState.favoriteProductIds,
+                            product.id in
+                                    uiState.favoriteProductIds,
 
-                        orderMessage = uiState.orderMessage,
+                        orderMessage =
+                            uiState.orderMessage,
 
-                        orderUnitCount = orderUnitCount,
+                        orderUnitCount =
+                            orderUnitCount,
 
                         onFavoriteClick = {
 
@@ -166,27 +186,38 @@ fun StoreApp() {
 
                             backStack.add(
                                 ProfileKey(
-                                    producerId = producerId
+                                    producerId =
+                                        producerId
                                 )
                             )
                         },
 
                         onBack = {
 
-                            storeViewModel.clearOrderMessage()
+                            storeViewModel
+                                .clearOrderMessage()
 
-                            backStack.removeLastOrNull()
+                            backStack
+                                .removeLastOrNull()
                         }
                     )
                 }
             }
 
+
+            // PEDIDO
+
             entry<OrderKey> {
 
                 OrderScreen(
-                    orderItems = uiState.orderItems,
-                    products = uiState.products,
-                    orderMessage = uiState.orderMessage,
+                    orderItems =
+                        uiState.orderItems,
+
+                    products =
+                        uiState.products,
+
+                    orderMessage =
+                        uiState.orderMessage,
 
                     onIncrease = { productId ->
 
@@ -197,32 +228,86 @@ fun StoreApp() {
 
                     onDecrease = { productId ->
 
-                        storeViewModel.decreaseOrderItem(
-                            productId
-                        )
+                        storeViewModel
+                            .decreaseOrderItem(
+                                productId
+                            )
                     },
 
                     onRemove = { productId ->
 
-                        storeViewModel.removeFromOrder(
-                            productId
+                        storeViewModel
+                            .removeFromOrder(
+                                productId
+                            )
+                    },
+
+                    onCheckoutClick = {
+
+                        backStack.add(
+                            CheckoutKey
                         )
                     },
 
                     onBack = {
 
-                        storeViewModel.clearOrderMessage()
+                        storeViewModel
+                            .clearOrderMessage()
 
-                        backStack.removeLastOrNull()
+                        backStack
+                            .removeLastOrNull()
                     }
                 )
             }
 
+
+            // CHECKOUT
+
+
+            entry<CheckoutKey> {
+
+                CheckoutScreen(
+                    orderItems = uiState.orderItems,
+                    products = uiState.products,
+                    uiState = checkoutUiState,
+
+                    onFullNameChange = storeViewModel::onFullNameChange,
+                    onPhoneChange = storeViewModel::onPhoneChange,
+                    onBillingTypeChange = storeViewModel::onBillingTypeChange,
+                    onNitChange = storeViewModel::onNitChange,
+                    onBusinessNameChange = storeViewModel::onBusinessNameChange,
+                    onPaymentMethodChange = storeViewModel::onPaymentMethodChange,
+
+                    onConfirmOrder = {
+                        if (storeViewModel.confirmOrder()) {
+                            backStack.add(ConfirmationKey)
+                        }
+                    },
+
+                    onBack = { backStack.removeLastOrNull() }
+                )
+            }
+
+            entry<ConfirmationKey> {
+                ConfirmationScreen(
+                    receipt = orderReceipt,
+                    onBackToCatalog = {
+                        while (backStack.size > 1) {
+                            backStack.removeLastOrNull()
+                        }
+                    }
+                )
+            }
+
+            // PERFIL
+
             entry<ProfileKey> { key ->
 
-                val producer = storeViewModel.getProducerById(
-                    key.producerId
-                )
+                val producer =
+                    storeViewModel
+                        .getProducerById(
+                            key.producerId
+                        )
 
                 if (producer != null) {
 
@@ -230,7 +315,9 @@ fun StoreApp() {
                         producer = producer,
 
                         onBack = {
-                            backStack.removeLastOrNull()
+
+                            backStack
+                                .removeLastOrNull()
                         }
                     )
                 }
