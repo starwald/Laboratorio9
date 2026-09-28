@@ -244,37 +244,32 @@ class StoreViewModel : ViewModel() {
     // -------------------------
 
     fun onFullNameChange(value: String) {
-
-        _checkoutUiState.value =
-            _checkoutUiState.value.copy(
-                fullName = value
-            )
+        _checkoutUiState.value = _checkoutUiState.value.copy(
+            fullName = value,
+            fullNameTouched = true
+        )
     }
 
     fun onPhoneChange(value: String) {
-
-        _checkoutUiState.value =
-            _checkoutUiState.value.copy(
-                phone = value
-            )
+        _checkoutUiState.value = _checkoutUiState.value.copy(
+            phone = value,
+            phoneTouched = true
+        )
     }
 
     fun onNitChange(value: String) {
-
-        _checkoutUiState.value =
-            _checkoutUiState.value.copy(
-                nit = value
-            )
+        _checkoutUiState.value = _checkoutUiState.value.copy(
+            nit = value,
+            nitTouched = true
+        )
     }
 
     fun onBusinessNameChange(value: String) {
-
-        _checkoutUiState.value =
-            _checkoutUiState.value.copy(
-                businessName = value
-            )
+        _checkoutUiState.value = _checkoutUiState.value.copy(
+            businessName = value,
+            businessNameTouched = true
+        )
     }
-
     fun onBillingTypeChange(
         billingType: BillingType
     ) {
@@ -310,72 +305,8 @@ class StoreViewModel : ViewModel() {
             )
     }
 
-    fun onFullNameTouched() {
-
-        _checkoutUiState.value =
-            _checkoutUiState.value.copy(
-                fullNameTouched = true
-            )
-    }
-
-    fun onPhoneTouched() {
-
-        _checkoutUiState.value =
-            _checkoutUiState.value.copy(
-                phoneTouched = true
-            )
-    }
-
-    fun onNitTouched() {
-
-        _checkoutUiState.value =
-            _checkoutUiState.value.copy(
-                nitTouched = true
-            )
-    }
-
-    fun onBusinessNameTouched() {
-
-        _checkoutUiState.value =
-            _checkoutUiState.value.copy(
-                businessNameTouched = true
-            )
-    }
-
-    fun isCheckoutFormValid(): Boolean {
-
-        val checkout =
-            _checkoutUiState.value
-
-        val nameValid =
-            validateFullName(
-                checkout.fullName
-            ) == null
-
-        val phoneValid =
-            validatePhoneNumber(
-                checkout.phone
-            ) == null
-
-        val billingValid =
-            if (checkout.billingType == BillingType.CF) {
-
-                true
-
-            } else {
-
-                validateNit(
-                    checkout.nit
-                ) == null &&
-                        validateBusinessName(
-                            checkout.businessName
-                        ) == null
-            }
-
-        return nameValid &&
-                phoneValid &&
-                billingValid
-    }
+    fun isCheckoutFormValid(): Boolean =
+        _checkoutUiState.value.isFormValid
 
     fun confirmOrder(): Boolean {
 
