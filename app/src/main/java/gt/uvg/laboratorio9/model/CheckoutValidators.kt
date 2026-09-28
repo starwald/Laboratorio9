@@ -1,5 +1,6 @@
 package gt.uvg.laboratorio9.model
 
+private fun Char.isAsciiDigit(): Boolean = this in '0'..'9'
 fun validateFullName(value: String): String? {
 
     val cleanValue = value.trim()
@@ -31,7 +32,7 @@ fun validatePhoneNumber(value: String): String? {
     return if (
         cleanValue.length == 8 &&
         cleanValue.all { character ->
-            character.isDigit()
+            character.isAsciiDigit()
         }
     ) {
         null
@@ -47,7 +48,7 @@ fun validateNit(value: String): String? {
     return if (
         cleanValue.length >= 5 &&
         cleanValue.all { character ->
-            character.isDigit()
+            character.isAsciiDigit()
         }
     ) {
         null

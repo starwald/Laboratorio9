@@ -197,6 +197,7 @@ fun OrderScreen(
 
             Button(
                 onClick = onCheckoutClick,
+                enabled = orderItems.sumOf { it.quantity } > 0,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Continuar al checkout")
