@@ -90,9 +90,7 @@ fun StoreApp() {
 
         entryProvider = entryProvider {
 
-            // -------------------------
             // CATALOGO
-            // -------------------------
 
             entry<CatalogKey> {
 
@@ -135,9 +133,8 @@ fun StoreApp() {
                 )
             }
 
-            // -------------------------
             // DETALLE
-            // -------------------------
+
 
             entry<DetailKey> { key ->
 
@@ -204,9 +201,8 @@ fun StoreApp() {
                 }
             }
 
-            // -------------------------
+
             // PEDIDO
-            // -------------------------
 
             entry<OrderKey> {
 
@@ -261,52 +257,32 @@ fun StoreApp() {
                 )
             }
 
-            // -------------------------
+
             // CHECKOUT
-            // -------------------------
+
 
             entry<CheckoutKey> {
 
                 CheckoutScreen(
-                    orderItems =
-                        uiState.orderItems,
+                    orderItems = uiState.orderItems,
+                    products = uiState.products,
+                    uiState = checkoutUiState,
 
-                    products =
-                        uiState.products,
+                    onFullNameChange = storeViewModel::onFullNameChange,
+                    onPhoneChange = storeViewModel::onPhoneChange,
+                    onBillingTypeChange = storeViewModel::onBillingTypeChange,
+                    onNitChange = storeViewModel::onNitChange,
+                    onBusinessNameChange = storeViewModel::onBusinessNameChange,
+                    onPaymentMethodChange = storeViewModel::onPaymentMethodChange,
 
-                    fullName =
-                        checkoutUiState.fullName,
+                    // Temporal: en el Paso 14 esto navega al recibo.
+                    onConfirmOrder = { storeViewModel.confirmOrder() },
 
-                    phone =
-                        checkoutUiState.phone,
-
-                    onFullNameChange = { value ->
-
-                        storeViewModel
-                            .onFullNameChange(
-                                value
-                            )
-                    },
-
-                    onPhoneChange = { value ->
-
-                        storeViewModel
-                            .onPhoneChange(
-                                value
-                            )
-                    },
-
-                    onBack = {
-
-                        backStack
-                            .removeLastOrNull()
-                    }
+                    onBack = { backStack.removeLastOrNull() }
                 )
             }
 
-            // -------------------------
             // PERFIL
-            // -------------------------
 
             entry<ProfileKey> { key ->
 
