@@ -6,9 +6,17 @@ import gt.uvg.laboratorio9.data.coffeePresentations
 import gt.uvg.laboratorio9.data.coffeeRoasts
 import gt.uvg.laboratorio9.data.products
 import gt.uvg.laboratorio9.data.producers
+import gt.uvg.laboratorio9.model.BillingType
 import gt.uvg.laboratorio9.model.OrderItem
+import gt.uvg.laboratorio9.model.OrderReceipt
+import gt.uvg.laboratorio9.model.PaymentMethod
 import gt.uvg.laboratorio9.model.Product
 import gt.uvg.laboratorio9.model.Producer
+import gt.uvg.laboratorio9.model.calculateOrderTotal
+import gt.uvg.laboratorio9.model.validateBusinessName
+import gt.uvg.laboratorio9.model.validateFullName
+import gt.uvg.laboratorio9.model.validateNit
+import gt.uvg.laboratorio9.model.validatePhoneNumber
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.random.Random
@@ -25,6 +33,21 @@ class StoreViewModel : ViewModel() {
     )
 
     val uiState: StateFlow<StoreUiState> = _uiState
+
+    private val _checkoutUiState = MutableStateFlow(
+        CheckoutUiState()
+    )
+
+    val checkoutUiState: StateFlow<CheckoutUiState> =
+        _checkoutUiState
+
+    private val _orderReceipt =
+        MutableStateFlow<OrderReceipt?>(null)
+
+    val orderReceipt: StateFlow<OrderReceipt?> =
+        _orderReceipt
+
+    private var nextOrderNumber = 1
 
     private fun generateProducts(): List<Product> {
 
@@ -55,15 +78,15 @@ class StoreViewModel : ViewModel() {
         val currentFavorites =
             _uiState.value.favoriteProductIds
 
-        val newFavorites = if (productId in currentFavorites) {
+        val newFavorites =
+            if (productId in currentFavorites) {
 
-            currentFavorites - productId
+                currentFavorites - productId
 
-        } else {
+            } else {
 
-            currentFavorites + productId
-
-        }
+                currentFavorites + productId
+            }
 
         _uiState.value = _uiState.value.copy(
             favoriteProductIds = newFavorites
@@ -151,11 +174,8 @@ class StoreViewModel : ViewModel() {
                     } else {
 
                         item
-
                     }
-
                 }
-
             }
 
         _uiState.value = _uiState.value.copy(
@@ -164,9 +184,7 @@ class StoreViewModel : ViewModel() {
         )
     }
 
-    fun decreaseOrderItem(
-        productId: Int
-    ) {
+    fun decreaseOrderItem(productId: Int) {
 
         val currentItem =
             _uiState.value.orderItems.find {
@@ -193,11 +211,8 @@ class StoreViewModel : ViewModel() {
                     } else {
 
                         item
-
                     }
-
                 }
-
             }
 
         _uiState.value = _uiState.value.copy(
@@ -205,9 +220,7 @@ class StoreViewModel : ViewModel() {
         )
     }
 
-    fun removeFromOrder(
-        productId: Int
-    ) {
+    fun removeFromOrder(productId: Int) {
 
         val newItems =
             _uiState.value.orderItems.filter {
@@ -224,5 +237,208 @@ class StoreViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(
             orderMessage = null
         )
+    }
+
+    // -------------------------
+    // CHECKOUT
+    // -------------------------
+
+    fun onFullNameChange(value: String) {
+
+        _checkoutUiState.value =
+            _checkoutUiState.value.copy(
+                fullName = value
+            )
+    }
+
+    fun onPhoneChange(value: String) {
+
+        _checkoutUiState.value =
+            _checkoutUiState.value.copy(
+                phone = value
+            )
+    }
+
+    fun onNitChange(value: String) {
+
+        _checkoutUiState.value =
+            _checkoutUiState.value.copy(
+                nit = value
+            )
+    }
+
+    fun onBusinessNameChange(value: String) {
+
+        _checkoutUiState.value =
+            _checkoutUiState.value.copy(
+                businessName = value
+            )
+    }
+
+    fun onBillingTypeChange(
+        billingType: BillingType
+    ) {
+
+        _checkoutUiState.value =
+            if (billingType == BillingType.CF) {
+
+                _checkoutUiState.value.copy(
+                    billingType = BillingType.CF,
+
+                    nit = "",
+                    businessName = "",
+
+                    nitTouched = false,
+                    businessNameTouched = false
+                )
+
+            } else {
+
+                _checkoutUiState.value.copy(
+                    billingType = BillingType.NIT
+                )
+            }
+    }
+
+    fun onPaymentMethodChange(
+        paymentMethod: PaymentMethod
+    ) {
+
+        _checkoutUiState.value =
+            _checkoutUiState.value.copy(
+                paymentMethod = paymentMethod
+            )
+    }
+
+    fun onFullNameTouched() {
+
+        _checkoutUiState.value =
+            _checkoutUiState.value.copy(
+                fullNameTouched = true
+            )
+    }
+
+    fun onPhoneTouched() {
+
+        _checkoutUiState.value =
+            _checkoutUiState.value.copy(
+                phoneTouched = true
+            )
+    }
+
+    fun onNitTouched() {
+
+        _checkoutUiState.value =
+            _checkoutUiState.value.copy(
+                nitTouched = true
+            )
+    }
+
+    fun onBusinessNameTouched() {
+
+        _checkoutUiState.value =
+            _checkoutUiState.value.copy(
+                businessNameTouched = true
+            )
+    }
+
+    fun isCheckoutFormValid(): Boolean {
+
+        val checkout =
+            _checkoutUiState.value
+
+        val nameValid =
+            validateFullName(
+                checkout.fullName
+            ) == null
+
+        val phoneValid =
+            validatePhoneNumber(
+                checkout.phone
+            ) == null
+
+        val billingValid =
+            if (checkout.billingType == BillingType.CF) {
+
+                true
+
+            } else {
+
+                validateNit(
+                    checkout.nit
+                ) == null &&
+                        validateBusinessName(
+                            checkout.businessName
+                        ) == null
+            }
+
+        return nameValid &&
+                phoneValid &&
+                billingValid
+    }
+
+    fun confirmOrder(): Boolean {
+
+        val checkout =
+            _checkoutUiState.value
+
+        val orderItems =
+            _uiState.value.orderItems
+
+        if (
+            !isCheckoutFormValid() ||
+            orderItems.isEmpty()
+        ) {
+            return false
+        }
+
+        val total =
+            calculateOrderTotal(
+                orderItems = orderItems,
+                products = _uiState.value.products
+            )
+
+        val folio =
+            "#ORD-" +
+                    nextOrderNumber
+                        .toString()
+                        .padStart(
+                            length = 5,
+                            padChar = '0'
+                        )
+
+        nextOrderNumber++
+
+        _orderReceipt.value =
+            OrderReceipt(
+                folio = folio,
+
+                customerName =
+                    checkout.fullName.trim(),
+
+                billingType =
+                    checkout.billingType,
+
+                paymentMethod =
+                    checkout.paymentMethod,
+
+                total = total
+            )
+
+        _uiState.value =
+            _uiState.value.copy(
+                orderItems = emptyList(),
+                orderMessage = null
+            )
+
+        resetCheckout()
+
+        return true
+    }
+
+    private fun resetCheckout() {
+
+        _checkoutUiState.value =
+            CheckoutUiState()
     }
 }

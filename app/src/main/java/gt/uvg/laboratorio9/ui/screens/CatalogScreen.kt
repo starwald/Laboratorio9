@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.sp
 import gt.uvg.laboratorio9.model.Product
 import gt.uvg.laboratorio9.ui.components.ProductImage
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.LaunchedEffect
 
 @Composable
 fun CatalogScreen(
@@ -46,10 +45,6 @@ fun CatalogScreen(
 ) {
 
     val coroutineScope = rememberCoroutineScope()
-
-    LaunchedEffect(searchQuery) {
-        gridState.scrollToItem(0)
-    }
 
     val cleanQuery = searchQuery.trim()
 
@@ -105,8 +100,13 @@ fun CatalogScreen(
             OutlinedTextField(
                 value = searchQuery,
 
-                onValueChange = {
-                    onSearchQueryChange(it)
+                onValueChange = { newQuery ->
+
+                    onSearchQueryChange(newQuery)
+
+                    coroutineScope.launch {
+                        gridState.scrollToItem(0)
+                    }
                 },
 
                 label = {

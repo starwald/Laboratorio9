@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -30,6 +32,7 @@ fun OrderScreen(
     onIncrease: (Int) -> Unit,
     onDecrease: (Int) -> Unit,
     onRemove: (Int) -> Unit,
+    onCheckoutClick: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -43,6 +46,9 @@ fun OrderScreen(
         modifier = modifier
             .fillMaxSize()
             .safeDrawingPadding()
+            .verticalScroll(
+                rememberScrollState()
+            )
             .padding(16.dp)
     ) {
 
@@ -183,6 +189,21 @@ fun OrderScreen(
                 text = "Total: Q%.2f".format(total),
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
+            )
+
+            Spacer(
+                modifier = Modifier.height(16.dp)
+            )
+
+            Button(
+                onClick = onCheckoutClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Continuar al checkout")
+            }
+
+            Spacer(
+                modifier = Modifier.height(16.dp)
             )
         }
     }
