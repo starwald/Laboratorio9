@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -44,29 +45,61 @@ android {
 
 dependencies {
 
-    implementation(platform(libs.androidx.compose.bom))
+    implementation(
+        platform(libs.androidx.compose.bom)
+    )
 
+    // Android / Compose
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
 
+    // Lifecycle
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    // Navigation 3
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.navigation3.ui)
 
+    // Serialization
     implementation(libs.kotlinx.serialization.core)
 
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-
+    // Coil 3
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
-    testImplementation(libs.junit)
+    // -------------------------
+    // LAB 12 - ROOM 3
+    // -------------------------
 
-    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(
+        libs.androidx.room3.runtime
+    )
+
+    ksp(
+        libs.androidx.room3.compiler
+    )
+
+    // AndroidSQLiteDriver
+    implementation(
+        libs.androidx.sqlite.framework
+    )
+
+    // -------------------------
+    // LAB 12 - DATASTORE
+    // -------------------------
+
+    implementation(
+        libs.androidx.datastore.preferences
+    )
+
+    // Tests
+    testImplementation(libs.junit)
 
     androidTestImplementation(
         platform(libs.androidx.compose.bom)
