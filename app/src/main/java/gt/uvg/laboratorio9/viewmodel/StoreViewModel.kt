@@ -20,8 +20,24 @@ import gt.uvg.laboratorio9.model.validatePhoneNumber
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.random.Random
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import gt.uvg.laboratorio9.data.local.FavoriteEntity
+import gt.uvg.laboratorio9.data.local.OrderLineEntity
+import gt.uvg.laboratorio9.data.local.StoreDatabaseProvider
+import kotlinx.coroutines.launch
 
-class StoreViewModel : ViewModel() {
+class StoreViewModel(
+    application: Application
+) : AndroidViewModel(application) {
+
+    private val database =
+        StoreDatabaseProvider.getDatabase(application)
+
+    private val favoriteDao = database.favoriteDao()
+
+    private val orderLineDao = database.orderLineDao()
 
     private val generatedProducts = generateProducts()
 
@@ -46,6 +62,36 @@ class StoreViewModel : ViewModel() {
 
     val orderReceipt: StateFlow<OrderReceipt?> =
         _orderReceipt
+
+    init {
+
+        viewModelScope.launch {
+
+            favoriteDao.observeFavorites().collect { favorites ->
+
+                _uiState.value = _uiState.value.copy(
+                    favoriteProductIds = favorites.map {
+                        it.productId
+                    }.toSet()
+                )
+            }
+        }
+
+        viewModelScope.launch {
+
+            orderLineDao.observeOrderLines().collect { lines ->
+
+                _uiState.value = _uiState.value.copy(
+                    orderItems = lines.map { line ->
+                        OrderItem(
+                            productId = line.productId,
+                            quantity = line.quantity
+                        )
+                    }
+                )
+            }
+        }
+    }
 
     private var nextOrderNumber = 1
 
@@ -75,22 +121,22 @@ class StoreViewModel : ViewModel() {
 
     fun toggleFavorite(productId: Int) {
 
-        val currentFavorites =
-            _uiState.value.favoriteProductIds
+        viewModelScope.launch {
 
-        val newFavorites =
-            if (productId in currentFavorites) {
+            val isFavorite =
+                productId in _uiState.value.favoriteProductIds
 
-                currentFavorites - productId
+            if (isFavorite) {
+
+                favoriteDao.deleteFavorite(productId)
 
             } else {
 
-                currentFavorites + productId
+                favoriteDao.insertFavorite(
+                    FavoriteEntity(productId)
+                )
             }
-
-        _uiState.value = _uiState.value.copy(
-            favoriteProductIds = newFavorites
-        )
+        }
     }
 
     fun getProductById(productId: Int): Product? {
@@ -178,58 +224,50 @@ class StoreViewModel : ViewModel() {
                 }
             }
 
+        viewModelScope.launch {
+
+            orderLineDao.upsertOrderLine(
+                OrderLineEntity(
+                    productId = productId,
+                    quantity = newQuantity
+                )
+            )
+        }
+
         _uiState.value = _uiState.value.copy(
-            orderItems = newItems,
             orderMessage = "Producto agregado al pedido"
         )
     }
 
     fun decreaseOrderItem(productId: Int) {
 
-        val currentItem =
-            _uiState.value.orderItems.find {
-                it.productId == productId
-            } ?: return
+        val currentItem = _uiState.value.orderItems.find {
+            it.productId == productId
+        } ?: return
 
-        val newItems =
+        viewModelScope.launch {
+
             if (currentItem.quantity <= 1) {
 
-                _uiState.value.orderItems.filter {
-                    it.productId != productId
-                }
+                orderLineDao.deleteOrderLine(productId)
 
             } else {
 
-                _uiState.value.orderItems.map { item ->
-
-                    if (item.productId == productId) {
-
-                        item.copy(
-                            quantity = item.quantity - 1
-                        )
-
-                    } else {
-
-                        item
-                    }
-                }
+                orderLineDao.upsertOrderLine(
+                    OrderLineEntity(
+                        productId = productId,
+                        quantity = currentItem.quantity - 1
+                    )
+                )
             }
-
-        _uiState.value = _uiState.value.copy(
-            orderItems = newItems
-        )
+        }
     }
 
     fun removeFromOrder(productId: Int) {
 
-        val newItems =
-            _uiState.value.orderItems.filter {
-                it.productId != productId
-            }
-
-        _uiState.value = _uiState.value.copy(
-            orderItems = newItems
-        )
+        viewModelScope.launch {
+            orderLineDao.deleteOrderLine(productId)
+        }
     }
 
     fun clearOrderMessage() {
@@ -356,11 +394,13 @@ class StoreViewModel : ViewModel() {
                 total = total
             )
 
-        _uiState.value =
-            _uiState.value.copy(
-                orderItems = emptyList(),
-                orderMessage = null
-            )
+        viewModelScope.launch {
+            orderLineDao.clearOrder()
+        }
+
+        _uiState.value = _uiState.value.copy(
+            orderMessage = null
+        )
 
         resetCheckout()
 
