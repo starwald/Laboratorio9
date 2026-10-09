@@ -1,5 +1,6 @@
 package gt.uvg.laboratorio9.viewmodel
 
+import gt.uvg.laboratorio9.model.CatalogOrder
 import gt.uvg.laboratorio9.model.OrderItem
 import gt.uvg.laboratorio9.model.Product
 import gt.uvg.laboratorio9.model.Producer
@@ -9,5 +10,6 @@ data class StoreUiState(
     val producers: List<Producer> = emptyList(),
     val favoriteProductIds: Set<Int> = emptySet(),
     val orderItems: List<OrderItem> = emptyList(),
-    val orderMessage: String? = null
+    val orderMessage: String? = null,
+    val catalogOrder: CatalogOrder = CatalogOrder.NAME
 )

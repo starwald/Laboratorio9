@@ -104,6 +104,7 @@ fun StoreApp() {
                     gridState = catalogGridState,
                     searchQuery = searchQuery,
                     orderUnitCount = orderUnitCount,
+                    catalogOrder = uiState.catalogOrder,
 
                     onSearchQueryChange = {
                         searchQuery = it
@@ -132,7 +133,9 @@ fun StoreApp() {
                         storeViewModel.toggleFavorite(
                             productId
                         )
-                    }
+                    },
+
+                    onCatalogOrderChange = storeViewModel::onCatalogOrderChange
                 )
             }
 
