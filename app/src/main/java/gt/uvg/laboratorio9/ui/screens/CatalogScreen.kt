@@ -1,3 +1,4 @@
+
 package gt.uvg.laboratorio9.ui.screens
 
 import android.util.Log
@@ -44,23 +45,20 @@ fun CatalogScreen(
     catalogOrder: CatalogOrder,
     onSearchQueryChange: (String) -> Unit,
     onOrderClick: () -> Unit,
+    onOrdersClick: () -> Unit,
     onProductClick: (Int) -> Unit,
     onFavoriteClick: (Int) -> Unit,
     onCatalogOrderChange: (CatalogOrder) -> Unit,
     modifier: Modifier = Modifier
 ) {
-
     val coroutineScope = rememberCoroutineScope()
-
     val cleanQuery = searchQuery.trim()
 
     val filteredProducts = products.filter { product ->
-
         product.name.contains(
             cleanQuery,
             ignoreCase = true
         )
-
     }
 
     val showBackToTop =
@@ -71,13 +69,11 @@ fun CatalogScreen(
             .fillMaxSize()
             .safeDrawingPadding()
     ) {
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-
             Text(
                 text = "Cafetería",
                 fontSize = 28.sp,
@@ -89,36 +85,39 @@ fun CatalogScreen(
                 fontSize = 16.sp
             )
 
-            Button(
-                onClick = onOrderClick
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth()
             ) {
+                Button(
+                    onClick = onOrderClick
+                ) {
+                    Text("Pedido ($orderUnitCount)")
+                }
 
-                Text(
-                    text = "Pedido ($orderUnitCount)"
-                )
-
+                OutlinedButton(
+                    onClick = onOrdersClick,
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    Text("Mis pedidos")
+                }
             }
 
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
+            Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(
                 value = searchQuery,
-
                 onValueChange = { newQuery ->
-
                     onSearchQueryChange(newQuery)
 
                     coroutineScope.launch {
                         gridState.scrollToItem(0)
                     }
                 },
-
                 label = {
                     Text("Buscar producto")
                 },
-
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -168,107 +167,74 @@ fun CatalogScreen(
             Spacer(
                 modifier = Modifier.height(8.dp)
             )
+            Spacer(Modifier.height(8.dp))
 
             Text(
                 text = "${filteredProducts.size} de ${products.size} productos",
                 fontSize = 14.sp
             )
 
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
+            Spacer(Modifier.height(12.dp))
 
             if (filteredProducts.isEmpty()) {
-
                 Text(
                     text = "No encontramos productos",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
 
-                Spacer(
-                    modifier = Modifier.height(8.dp)
-                )
+                Spacer(Modifier.height(8.dp))
 
-                Text(
-                    text = "Intenta con otro nombre de café."
-                )
+                Text("Intenta con otro nombre de café.")
 
-                Spacer(
-                    modifier = Modifier.height(12.dp)
-                )
+                Spacer(Modifier.height(12.dp))
 
                 Button(
                     onClick = {
                         onSearchQueryChange("")
+                        coroutineScope.launch {
+                            gridState.scrollToItem(0)
+                        }
                     }
                 ) {
-
                     Text("Limpiar búsqueda")
-
                 }
-
             } else {
-
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     state = gridState,
                     modifier = Modifier.fillMaxSize()
                 ) {
-
                     items(
                         items = filteredProducts,
-
-                        key = { product ->
-                            product.id
-                        }
+                        key = { product -> product.id }
                     ) { product ->
-
                         ProductCard(
                             product = product,
-
                             isFavorite =
                                 product.id in favoriteProductIds,
-
-                            onProductClick =
-                                onProductClick,
-
-                            onFavoriteClick =
-                                onFavoriteClick
+                            onProductClick = onProductClick,
+                            onFavoriteClick = onFavoriteClick
                         )
-
                     }
-
                 }
-
             }
-
         }
 
         if (showBackToTop) {
-
             Button(
                 onClick = {
-
                     coroutineScope.launch {
-
                         gridState.animateScrollToItem(0)
-
                     }
-
                 },
-
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(24.dp)
             ) {
-
                 Text("↑ Volver arriba")
-
             }
-
         }
-
     }
 }
 
@@ -304,23 +270,18 @@ private fun ProductCard(
     onFavoriteClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-
     DisposableEffect(product.id) {
-
         Log.d(
             "CatalogProbe",
             "ENTER product=${product.id}"
         )
 
         onDispose {
-
             Log.d(
                 "CatalogProbe",
                 "DISPOSE product=${product.id}"
             )
-
         }
-
     }
 
     Column(
@@ -328,7 +289,6 @@ private fun ProductCard(
             .fillMaxWidth()
             .padding(8.dp)
     ) {
-
         ProductImage(
             imageUrl = product.imageUrl,
             modifier = Modifier
@@ -336,9 +296,7 @@ private fun ProductCard(
                 .aspectRatio(1f)
         )
 
-        Spacer(
-            modifier = Modifier.height(8.dp)
-        )
+        Spacer(Modifier.height(8.dp))
 
         Text(
             text = product.name,
@@ -351,9 +309,7 @@ private fun ProductCard(
             fontSize = 14.sp
         )
 
-        Spacer(
-            modifier = Modifier.height(8.dp)
-        )
+        Spacer(Modifier.height(8.dp))
 
         Text(
             text = "Q%.2f".format(product.price),
@@ -363,54 +319,33 @@ private fun ProductCard(
 
         Text(
             text = if (product.stock == 0) {
-
                 "Agotado"
-
             } else {
-
                 "Stock: ${product.stock}"
-
             },
             fontSize = 14.sp
         )
 
         Button(
             onClick = {
-
-                onProductClick(
-                    product.id
-                )
-
+                onProductClick(product.id)
             }
         ) {
-
             Text("Ver producto")
-
         }
 
         TextButton(
             onClick = {
-
-                onFavoriteClick(
-                    product.id
-                )
-
+                onFavoriteClick(product.id)
             }
         ) {
-
             Text(
                 text = if (isFavorite) {
-
                     "♥ Favorito"
-
                 } else {
-
                     "♡ Favorito"
-
                 }
             )
-
         }
-
     }
 }

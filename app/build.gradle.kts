@@ -1,3 +1,4 @@
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -68,6 +69,7 @@ dependencies {
 
     // Serialization
     implementation(libs.kotlinx.serialization.core)
+    implementation(libs.kotlinx.serialization.json)
 
     // Coil 3
     implementation(libs.coil.compose)
@@ -97,6 +99,17 @@ dependencies {
     implementation(
         libs.androidx.datastore.preferences
     )
+    // LAB 12 - Room 3
+    implementation(libs.androidx.room3.runtime)
+    ksp(libs.androidx.room3.compiler)
+    implementation(libs.androidx.sqlite.framework)
+
+    // LAB 12 - DataStore
+    implementation(libs.androidx.datastore.preferences)
+
+    // LAB 13 - Retrofit
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.kotlinx.serialization)
 
     // Tests
     testImplementation(libs.junit)
