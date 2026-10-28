@@ -73,7 +73,6 @@ fun StoreApp() {
     val orderUnitCount =
         uiState.orderItems.sumOf { it.quantity }
 
-    // Navegar tras respuesta exitosa de MockAPI
     LaunchedEffect(orderSendState) {
         if (
             orderSendState is OrderSendState.Success &&
@@ -147,15 +146,11 @@ fun StoreApp() {
                     },
 
                     onFavoriteClick = { productId ->
-
-                        storeViewModel.toggleFavorite(
-                            productId
-                        )
+                        storeViewModel.toggleFavorite(productId)
                     },
 
-                    onCatalogOrderChange = storeViewModel::onCatalogOrderChange
-                        storeViewModel.toggleFavorite(productId)
-                    }
+                    onCatalogOrderChange =
+                        storeViewModel::onCatalogOrderChange
                 )
             }
 
@@ -299,7 +294,6 @@ fun StoreApp() {
                     uiState = ordersUiState,
 
                     onOrderClick = { orderId ->
-
                         orderDetailViewModel.loadOrder(orderId)
 
                         backStack.add(
