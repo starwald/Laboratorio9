@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import gt.uvg.laboratorio9.model.CatalogOrder
 import gt.uvg.laboratorio9.model.Product
 import gt.uvg.laboratorio9.ui.components.ProductImage
 import kotlinx.coroutines.launch
@@ -40,11 +42,13 @@ fun CatalogScreen(
     gridState: LazyGridState,
     searchQuery: String,
     orderUnitCount: Int,
+    catalogOrder: CatalogOrder,
     onSearchQueryChange: (String) -> Unit,
     onOrderClick: () -> Unit,
     onOrdersClick: () -> Unit,
     onProductClick: (Int) -> Unit,
     onFavoriteClick: (Int) -> Unit,
+    onCatalogOrderChange: (CatalogOrder) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -117,6 +121,52 @@ fun CatalogScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            Spacer(
+                modifier = Modifier.height(12.dp)
+            )
+
+            Text(
+                text = "Ordenar por:",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(
+                modifier = Modifier.height(4.dp)
+            )
+
+            Row {
+
+                CatalogOrderButton(
+                    label = "Nombre",
+                    selected = catalogOrder == CatalogOrder.NAME,
+                    onClick = {
+                        onCatalogOrderChange(CatalogOrder.NAME)
+                        coroutineScope.launch {
+                            gridState.scrollToItem(0)
+                        }
+                    }
+                )
+
+                Spacer(
+                    modifier = Modifier.height(0.dp)
+                )
+
+                CatalogOrderButton(
+                    label = "Precio",
+                    selected = catalogOrder == CatalogOrder.PRICE,
+                    onClick = {
+                        onCatalogOrderChange(CatalogOrder.PRICE)
+                        coroutineScope.launch {
+                            gridState.scrollToItem(0)
+                        }
+                    }
+                )
+            }
+
+            Spacer(
+                modifier = Modifier.height(8.dp)
+            )
             Spacer(Modifier.height(8.dp))
 
             Text(
@@ -184,6 +234,30 @@ fun CatalogScreen(
             ) {
                 Text("↑ Volver arriba")
             }
+        }
+    }
+}
+
+@Composable
+private fun CatalogOrderButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (selected) {
+        Button(
+            onClick = onClick,
+            modifier = modifier.padding(end = 8.dp)
+        ) {
+            Text(label)
+        }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = modifier.padding(end = 8.dp)
+        ) {
+            Text(label)
         }
     }
 }

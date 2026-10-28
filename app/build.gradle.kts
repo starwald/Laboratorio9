@@ -46,7 +46,9 @@ android {
 
 dependencies {
 
-    implementation(platform(libs.androidx.compose.bom))
+    implementation(
+        platform(libs.androidx.compose.bom)
+    )
 
     // Android / Compose
     implementation(libs.androidx.activity.compose)
@@ -73,6 +75,30 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
+    // -------------------------
+    // LAB 12 - ROOM 3
+    // -------------------------
+
+    implementation(
+        libs.androidx.room3.runtime
+    )
+
+    ksp(
+        libs.androidx.room3.compiler
+    )
+
+    // AndroidSQLiteDriver
+    implementation(
+        libs.androidx.sqlite.framework
+    )
+
+    // -------------------------
+    // LAB 12 - DATASTORE
+    // -------------------------
+
+    implementation(
+        libs.androidx.datastore.preferences
+    )
     // LAB 12 - Room 3
     implementation(libs.androidx.room3.runtime)
     ksp(libs.androidx.room3.compiler)
