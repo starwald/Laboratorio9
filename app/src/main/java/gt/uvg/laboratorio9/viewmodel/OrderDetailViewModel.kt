@@ -1,27 +1,27 @@
-
 package gt.uvg.laboratorio9.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
-import gt.uvg.laboratorio9.network.RetrofitProvider
-import kotlinx.coroutines.CancellationException
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import gt.uvg.laboratorio9.StoreApplication
+import gt.uvg.laboratorio9.model.OrderNotFoundException
+import gt.uvg.laboratorio9.repository.RemoteOrdersRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerializationException
-import retrofit2.HttpException
-import java.io.IOException
 
-class OrderDetailViewModel : ViewModel() {
+class OrderDetailViewModel(
+    private val repository: RemoteOrdersRepository
+) : ViewModel() {
 
     private val _uiState =
-        MutableStateFlow<OrderDetailUiState>(
-            OrderDetailUiState.Idle
-        )
+        MutableStateFlow<OrderDetailUiState>(OrderDetailUiState.Idle)
 
-    val uiState: StateFlow<OrderDetailUiState> =
-        _uiState
+    val uiState = _uiState.asStateFlow()
 
     private var loadedOrderId: String? = null
     private var loadJob: Job? = null
@@ -33,45 +33,45 @@ class OrderDetailViewModel : ViewModel() {
         if (
             !forceRefresh &&
             loadedOrderId == orderId &&
-            _uiState.value !is OrderDetailUiState.Idle
+            (
+                    _uiState.value is OrderDetailUiState.Loading ||
+                            _uiState.value is OrderDetailUiState.Success
+                    )
         ) {
             return
         }
 
         loadJob?.cancel()
         loadedOrderId = orderId
-
         _uiState.value = OrderDetailUiState.Loading
 
         loadJob = viewModelScope.launch {
-            try {
-                val order =
-                    RetrofitProvider.orderApi.getOrderById(orderId)
-
-                _uiState.value =
-                    OrderDetailUiState.Success(order)
-
-            } catch (e: CancellationException) {
-                throw e
-
-            } catch (e: HttpException) {
-                _uiState.value =
-                    if (e.code() == 404) {
+            repository.getOrderById(orderId).fold(
+                onSuccess = { order ->
+                    _uiState.value = OrderDetailUiState.Success(order)
+                },
+                onFailure = { error ->
+                    _uiState.value = if (error is OrderNotFoundException) {
                         OrderDetailUiState.NotFound
                     } else {
                         OrderDetailUiState.Error(
-                            "El servidor no pudo consultar este pedido."
+                            "No pudimos cargar el pedido. " +
+                                    "Revisa tu conexión e intenta nuevamente."
                         )
                     }
+                }
+            )
+        }
+    }
 
-            } catch (e: IOException) {
-                _uiState.value = OrderDetailUiState.Error(
-                    "No pudimos conectar con el servidor. Revisa tu conexión."
-                )
+    companion object {
+        val Factory: ViewModelProvider.Factory = viewModelFactory {
+            initializer {
+                val application =
+                    checkNotNull(this[APPLICATION_KEY]) as StoreApplication
 
-            } catch (e: SerializationException) {
-                _uiState.value = OrderDetailUiState.Error(
-                    "Recibimos una respuesta inesperada del servidor."
+                OrderDetailViewModel(
+                    repository = application.container.remoteOrdersRepository
                 )
             }
         }
