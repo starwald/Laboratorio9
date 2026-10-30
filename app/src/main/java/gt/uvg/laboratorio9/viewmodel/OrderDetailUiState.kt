@@ -1,7 +1,6 @@
-
 package gt.uvg.laboratorio9.viewmodel
 
-import gt.uvg.laboratorio9.network.dto.OrderDto
+import gt.uvg.laboratorio9.model.RemoteOrder
 
 sealed interface OrderDetailUiState {
 
@@ -10,7 +9,7 @@ sealed interface OrderDetailUiState {
     data object Loading : OrderDetailUiState
 
     data class Success(
-        val order: OrderDto
+        val order: RemoteOrder
     ) : OrderDetailUiState
 
     data object NotFound : OrderDetailUiState

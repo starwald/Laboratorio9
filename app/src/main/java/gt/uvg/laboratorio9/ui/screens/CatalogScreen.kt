@@ -1,7 +1,6 @@
-
 package gt.uvg.laboratorio9.ui.screens
 
-import android.util.Log
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,13 +16,13 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +42,10 @@ fun CatalogScreen(
     searchQuery: String,
     orderUnitCount: Int,
     catalogOrder: CatalogOrder,
+    isLoading: Boolean,
+    errorMessage: String?,
+    actionMessage: String?,
+    onRetry: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onOrderClick: () -> Unit,
     onOrdersClick: () -> Unit,
@@ -54,15 +57,9 @@ fun CatalogScreen(
     val coroutineScope = rememberCoroutineScope()
     val cleanQuery = searchQuery.trim()
 
-    val filteredProducts = products.filter { product ->
-        product.name.contains(
-            cleanQuery,
-            ignoreCase = true
-        )
+    val filteredProducts = products.filter {
+        it.name.contains(cleanQuery, ignoreCase = true)
     }
-
-    val showBackToTop =
-        gridState.firstVisibleItemIndex > 0
 
     Box(
         modifier = modifier
@@ -79,27 +76,17 @@ fun CatalogScreen(
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold
             )
-
-            Text(
-                text = "Cafés de Guatemala",
-                fontSize = 16.sp
-            )
+            Text("Cafés de Guatemala")
 
             Spacer(Modifier.height(12.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth()
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Button(
-                    onClick = onOrderClick
-                ) {
+                Button(onClick = onOrderClick) {
                     Text("Pedido ($orderUnitCount)")
                 }
-
-                OutlinedButton(
-                    onClick = onOrdersClick,
-                    modifier = Modifier.padding(start = 8.dp)
-                ) {
+                OutlinedButton(onClick = onOrdersClick) {
                     Text("Mis pedidos")
                 }
             }
@@ -108,35 +95,27 @@ fun CatalogScreen(
 
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = { newQuery ->
-                    onSearchQueryChange(newQuery)
-
+                onValueChange = { query ->
+                    onSearchQueryChange(query)
                     coroutineScope.launch {
                         gridState.scrollToItem(0)
                     }
                 },
-                label = {
-                    Text("Buscar producto")
-                },
+                label = { Text("Buscar producto") },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
+            Spacer(Modifier.height(8.dp))
 
             Text(
                 text = "Ordenar por:",
-                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
 
-            Spacer(
-                modifier = Modifier.height(4.dp)
-            )
-
-            Row {
-
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 CatalogOrderButton(
                     label = "Nombre",
                     selected = catalogOrder == CatalogOrder.NAME,
@@ -147,11 +126,6 @@ fun CatalogScreen(
                         }
                     }
                 )
-
-                Spacer(
-                    modifier = Modifier.height(0.dp)
-                )
-
                 CatalogOrderButton(
                     label = "Precio",
                     selected = catalogOrder == CatalogOrder.PRICE,
@@ -164,64 +138,102 @@ fun CatalogScreen(
                 )
             }
 
-            Spacer(
-                modifier = Modifier.height(8.dp)
-            )
+            if (actionMessage != null) {
+                Text(
+                    text = actionMessage,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+
+            if (isLoading) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(vertical = 12.dp)
+                ) {
+                    CircularProgressIndicator()
+                    Text("Cargando catálogo…")
+                }
+            }
+
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage,
+                    color = MaterialTheme.colorScheme.error
+                )
+                Button(
+                    onClick = onRetry,
+                    enabled = !isLoading
+                ) {
+                    Text("Reintentar")
+                }
+            }
+
             Spacer(Modifier.height(8.dp))
 
-            Text(
-                text = "${filteredProducts.size} de ${products.size} productos",
-                fontSize = 14.sp
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            if (filteredProducts.isEmpty()) {
+            if (products.isNotEmpty()) {
                 Text(
-                    text = "No encontramos productos",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
+                    text = "${filteredProducts.size} de " +
+                            "${products.size} productos",
+                    fontSize = 14.sp
                 )
-
                 Spacer(Modifier.height(8.dp))
+            }
 
-                Text("Intenta con otro nombre de café.")
-
-                Spacer(Modifier.height(12.dp))
-
-                Button(
-                    onClick = {
-                        onSearchQueryChange("")
-                        coroutineScope.launch {
-                            gridState.scrollToItem(0)
-                        }
+            when {
+                products.isEmpty() && !isLoading &&
+                        errorMessage == null -> {
+                    Text("No hay productos disponibles.")
+                    Button(onClick = onRetry) {
+                        Text("Volver a cargar")
                     }
-                ) {
-                    Text("Limpiar búsqueda")
                 }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    state = gridState,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(
-                        items = filteredProducts,
-                        key = { product -> product.id }
-                    ) { product ->
-                        ProductCard(
-                            product = product,
-                            isFavorite =
-                                product.id in favoriteProductIds,
-                            onProductClick = onProductClick,
-                            onFavoriteClick = onFavoriteClick
-                        )
+
+                products.isNotEmpty() && filteredProducts.isEmpty() -> {
+                    Text(
+                        text = "No encontramos productos",
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text("Intenta con otro nombre de café.")
+                    Button(
+                        onClick = {
+                            onSearchQueryChange("")
+                            coroutineScope.launch {
+                                gridState.scrollToItem(0)
+                            }
+                        }
+                    ) {
+                        Text("Limpiar búsqueda")
+                    }
+                }
+
+                filteredProducts.isNotEmpty() -> {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        state = gridState,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(
+                            items = filteredProducts,
+                            key = { it.id }
+                        ) { product ->
+                            ProductCard(
+                                product = product,
+                                isFavorite =
+                                    product.id in favoriteProductIds,
+                                onProductClick = onProductClick,
+                                onFavoriteClick = onFavoriteClick
+                            )
+                        }
                     }
                 }
             }
         }
 
-        if (showBackToTop) {
+        if (
+            filteredProducts.isNotEmpty() &&
+            gridState.firstVisibleItemIndex > 0
+        ) {
             Button(
                 onClick = {
                     coroutineScope.launch {
@@ -246,17 +258,11 @@ private fun CatalogOrderButton(
     modifier: Modifier = Modifier
 ) {
     if (selected) {
-        Button(
-            onClick = onClick,
-            modifier = modifier.padding(end = 8.dp)
-        ) {
+        Button(onClick = onClick, modifier = modifier) {
             Text(label)
         }
     } else {
-        OutlinedButton(
-            onClick = onClick,
-            modifier = modifier.padding(end = 8.dp)
-        ) {
+        OutlinedButton(onClick = onClick, modifier = modifier) {
             Text(label)
         }
     }
@@ -270,20 +276,6 @@ private fun ProductCard(
     onFavoriteClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    DisposableEffect(product.id) {
-        Log.d(
-            "CatalogProbe",
-            "ENTER product=${product.id}"
-        )
-
-        onDispose {
-            Log.d(
-                "CatalogProbe",
-                "DISPOSE product=${product.id}"
-            )
-        }
-    }
-
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -303,7 +295,6 @@ private fun ProductCard(
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
-
         Text(
             text = product.description,
             fontSize = 14.sp
@@ -316,35 +307,21 @@ private fun ProductCard(
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold
         )
-
         Text(
-            text = if (product.stock == 0) {
+            text = if (product.stock <= 0) {
                 "Agotado"
             } else {
                 "Stock: ${product.stock}"
-            },
-            fontSize = 14.sp
+            }
         )
 
-        Button(
-            onClick = {
-                onProductClick(product.id)
-            }
-        ) {
+        Button(onClick = { onProductClick(product.id) }) {
             Text("Ver producto")
         }
 
-        TextButton(
-            onClick = {
-                onFavoriteClick(product.id)
-            }
-        ) {
+        TextButton(onClick = { onFavoriteClick(product.id) }) {
             Text(
-                text = if (isFavorite) {
-                    "♥ Favorito"
-                } else {
-                    "♡ Favorito"
-                }
+                if (isFavorite) "♥ Favorito" else "♡ Favorito"
             )
         }
     }

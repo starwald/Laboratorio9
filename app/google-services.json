@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "44475597016",
+    "project_id": "laboratorio-14-60eef",
+    "storage_bucket": "laboratorio-14-60eef.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:44475597016:android:1a2339ad285da8384597ad",
+        "android_client_info": {
+          "package_name": "gt.uvg.laboratorio9"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGhcK-HajGI_XGKRQv9nCpz0PFMzzOkH4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

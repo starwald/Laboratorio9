@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -46,11 +47,8 @@ android {
 
 dependencies {
 
-    implementation(
-        platform(libs.androidx.compose.bom)
-    )
-
-    // Android / Compose
+    // Jetpack Compose
+    implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
@@ -67,7 +65,8 @@ dependencies {
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.navigation3.ui)
 
-    // Serialization
+
+    // Kotlin Serialization
     implementation(libs.kotlinx.serialization.core)
     implementation(libs.kotlinx.serialization.json)
 
@@ -75,41 +74,25 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
-    // -------------------------
-    // LAB 12 - ROOM 3
-    // -------------------------
-
-    implementation(
-        libs.androidx.room3.runtime
-    )
-
-    ksp(
-        libs.androidx.room3.compiler
-    )
-
-    // AndroidSQLiteDriver
-    implementation(
-        libs.androidx.sqlite.framework
-    )
-
-    // -------------------------
-    // LAB 12 - DATASTORE
-    // -------------------------
-
-    implementation(
-        libs.androidx.datastore.preferences
-    )
-    // LAB 12 - Room 3
+    // Room 3
     implementation(libs.androidx.room3.runtime)
     ksp(libs.androidx.room3.compiler)
     implementation(libs.androidx.sqlite.framework)
 
-    // LAB 12 - DataStore
+    // Preferences DataStore
     implementation(libs.androidx.datastore.preferences)
 
-    // LAB 13 - Retrofit
+    // Retrofit
     implementation(libs.retrofit)
     implementation(libs.retrofit.kotlinx.serialization)
+
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+
+    // Firebase Tasks + Coroutines
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // Tests
     testImplementation(libs.junit)

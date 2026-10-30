@@ -1,346 +1,477 @@
-
 package gt.uvg.laboratorio9.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
-import gt.uvg.laboratorio9.data.coffeeOrigins
-import gt.uvg.laboratorio9.data.coffeePresentations
-import gt.uvg.laboratorio9.data.coffeeRoasts
-import gt.uvg.laboratorio9.data.local.CatalogPreferences
-import gt.uvg.laboratorio9.data.local.FavoriteEntity
-import gt.uvg.laboratorio9.data.local.OrderLineEntity
-import gt.uvg.laboratorio9.data.local.StoreDatabaseProvider
-import gt.uvg.laboratorio9.data.producers
-import gt.uvg.laboratorio9.data.products
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import gt.uvg.laboratorio9.StoreApplication
 import gt.uvg.laboratorio9.model.BillingType
 import gt.uvg.laboratorio9.model.CatalogOrder
+import gt.uvg.laboratorio9.model.NewRemoteOrder
 import gt.uvg.laboratorio9.model.OrderItem
 import gt.uvg.laboratorio9.model.OrderReceipt
 import gt.uvg.laboratorio9.model.PaymentMethod
-import gt.uvg.laboratorio9.model.Producer
 import gt.uvg.laboratorio9.model.Product
+import gt.uvg.laboratorio9.model.Producer
+import gt.uvg.laboratorio9.model.RemoteOrderLine
 import gt.uvg.laboratorio9.model.calculateOrderTotal
 import gt.uvg.laboratorio9.model.sortProducts
-import gt.uvg.laboratorio9.network.RetrofitProvider
-import gt.uvg.laboratorio9.network.dto.CreateOrderDto
-import gt.uvg.laboratorio9.network.dto.OrderLineDto
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.launch
-import kotlinx.serialization.SerializationException
-import retrofit2.HttpException
-import java.io.IOException
+import gt.uvg.laboratorio9.repository.FavoriteRepository
+import gt.uvg.laboratorio9.repository.OrderRepository
+import gt.uvg.laboratorio9.repository.PreferencesRepository
+import gt.uvg.laboratorio9.repository.ProducerRepository
+import gt.uvg.laboratorio9.repository.ProductRepository
+import gt.uvg.laboratorio9.repository.RemoteOrdersRepository
 import java.time.Instant
-import kotlin.random.Random
-
-// Estado que solo vive en memoria: no sobrevive al cierre de la app.
-private data class StoreInMemoryState(
-    val products: List<Product> = emptyList(),
-    val producers: List<Producer> = emptyList(),
-    val orderMessage: String? = null
-)
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import gt.uvg.laboratorio9.repository.StockRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.supervisorScope
+import kotlin.collections.all
 
 class StoreViewModel(
-    application: Application
-) : AndroidViewModel(application) {
+    private val productRepository: ProductRepository,
+    private val producerRepository: ProducerRepository,
+    private val favoriteRepository: FavoriteRepository,
+    private val orderRepository: OrderRepository,
+    private val preferencesRepository: PreferencesRepository,
+    private val remoteOrdersRepository: RemoteOrdersRepository,
+    private val stockRepository: StockRepository
+) : ViewModel() {
 
-    private val database =
-        StoreDatabaseProvider.getDatabase(application)
-
-    private val favoriteDao = database.favoriteDao()
-    private val orderLineDao = database.orderLineDao()
-    private val catalogPreferences = CatalogPreferences(application)
-
-    private val generatedProducts = generateProducts()
-
-    private val _inMemoryState = MutableStateFlow(
-        StoreInMemoryState(
-            products = generatedProducts,
-            producers = producers
-        )
+    private val _uiState = MutableStateFlow(
+        StoreUiState(isLoading = true)
     )
+    val uiState = _uiState.asStateFlow()
 
+    private val _checkoutUiState = MutableStateFlow(CheckoutUiState())
+    val checkoutUiState = _checkoutUiState.asStateFlow()
 
-    val uiState: StateFlow<StoreUiState> = combine(
-        _inMemoryState,
-        favoriteDao.observeFavorites(),
-        orderLineDao.observeOrderLines(),
-        catalogPreferences.catalogOrder
-    ) { inMemory, favorites, orderLines, catalogOrder ->
-        StoreUiState(
-            products = sortProducts(inMemory.products, catalogOrder),
-            producers = inMemory.producers,
-            favoriteProductIds = favorites.map { it.productId }.toSet(),
-            orderItems = orderLines.map { line ->
-                OrderItem(productId = line.productId, quantity = line.quantity)
-            },
-            orderMessage = inMemory.orderMessage,
-            catalogOrder = catalogOrder
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = StoreUiState(
-            products = generatedProducts,
-            producers = producers
-        )
-    )
+    private val _orderReceipt = MutableStateFlow<OrderReceipt?>(null)
+    val orderReceipt = _orderReceipt.asStateFlow()
 
-    private val _checkoutUiState = MutableStateFlow(
-        CheckoutUiState()
-    )
-
-    val checkoutUiState: StateFlow<CheckoutUiState> =
-        _checkoutUiState
-
-    private val _orderReceipt =
-        MutableStateFlow<OrderReceipt?>(null)
-
-    val orderReceipt: StateFlow<OrderReceipt?> =
-        _orderReceipt
-
-    // LAB 13 - Estado remoto del envio
     private val _orderSendState =
-        MutableStateFlow<OrderSendState>(
-            OrderSendState.Idle
-        )
+        MutableStateFlow<OrderSendState>(OrderSendState.Idle)
+    val orderSendState = _orderSendState.asStateFlow()
 
-    val orderSendState: StateFlow<OrderSendState> =
-        _orderSendState
+    private val orderMutex = Mutex()
+    private val favoriteMutex = Mutex()
 
-    // -------------------------
-    // CATALOGO
-    // -------------------------
+    private var catalogJob: Job? = null
+    private var catalogTimeoutJob: Job? = null
 
-    private fun generateProducts(): List<Product> {
-
-        val random = Random(12345)
-
-        val newProducts = (4..500).map { id ->
-
-            val origin = coffeeOrigins.random(random)
-            val roast = coffeeRoasts.random(random)
-            val presentation = coffeePresentations.random(random)
-
-            Product(
-                id = id,
-                name = "Café $origin $roast $id",
-                description = "Café de $origin, tueste $roast, presentación de $presentation.",
-                price = random.nextInt(60, 121).toDouble(),
-                producerId = if (id % 2 == 0) 1 else 2,
-                stock = random.nextInt(0, 11),
-                imageUrl = "https://picsum.photos/seed/product-$id/400/400"
-            )
-        }
-
-        return products + newProducts
+    init {
+        observeLocalData()
+        retryCatalog()
     }
 
-    fun toggleFavorite(productId: Int) {
+    private val _isReserving = MutableStateFlow(false)
+    val isReserving: StateFlow<Boolean> = _isReserving
+
+    private fun showOrderMessage(message: String?) {
+        _uiState.update { it.copy(orderMessage = message) }
+    }
+
+    fun clearOrderMessage() {
+        _uiState.update { it.copy(orderMessage = null) }
+    }
+
+    private fun observeLocalData() {
+        viewModelScope.launch {
+            producerRepository.observeProducers()
+                .catch {
+                    showOrderMessage("No se pudieron cargar los productores.")
+                }
+                .collect { producers ->
+                    _uiState.update { it.copy(producers = producers) }
+                }
+        }
 
         viewModelScope.launch {
+            favoriteRepository.observeFavoriteIds()
+                .catch {
+                    showOrderMessage("No se pudieron cargar los favoritos.")
+                }
+                .collect { favoriteIds ->
+                    _uiState.update {
+                        it.copy(favoriteProductIds = favoriteIds)
+                    }
+                }
+        }
 
-            val isFavorite =
-                productId in uiState.value.favoriteProductIds
+        viewModelScope.launch {
+            orderRepository.observeOrderItems()
+                .catch {
+                    showOrderMessage("No se pudo cargar el pedido local.")
+                }
+                .collect { items ->
+                    _uiState.update { it.copy(orderItems = items) }
+                }
+        }
 
-            if (isFavorite) {
-                favoriteDao.deleteFavorite(productId)
-            } else {
-                favoriteDao.insertFavorite(FavoriteEntity(productId))
-        val currentFavorites =
-            _uiState.value.favoriteProductIds
+        viewModelScope.launch {
+            preferencesRepository.catalogOrder
+                .catch {
+                    showOrderMessage("No se pudo leer el orden del catálogo.")
+                }
+                .collect { order ->
+                    _uiState.update {
+                        it.copy(
+                            catalogOrder = order,
+                            products = sortProducts(it.products, order)
+                        )
+                    }
+                }
+        }
+    }
 
-        val newFavorites =
-            if (productId in currentFavorites) {
-                currentFavorites - productId
-            } else {
-                currentFavorites + productId
+    fun retryCatalog() {
+        catalogJob?.cancel()
+        catalogTimeoutJob?.cancel()
+
+        _uiState.update {
+            it.copy(isLoading = true, errorMessage = null)
+        }
+
+        catalogTimeoutJob = viewModelScope.launch {
+            delay(15_000)
+
+            _uiState.update {
+                if (it.isLoading) {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage =
+                            "La carga está tardando demasiado. " +
+                                    "Revisa tu conexión y vuelve a intentar."
+                    )
+                } else {
+                    it
+                }
+            }
+        }
+
+        catalogJob = viewModelScope.launch {
+            productRepository.observeProducts()
+                .catch {
+                    catalogTimeoutJob?.cancel()
+                    showCatalogError()
+                }
+                .collect { result ->
+                    catalogTimeoutJob?.cancel()
+
+                    result.fold(
+                        onSuccess = { products ->
+                            _uiState.update {
+                                it.copy(
+                                    products = sortProducts(
+                                        products,
+                                        it.catalogOrder
+                                    ),
+                                    isLoading = false,
+                                    errorMessage = null
+                                )
+                            }
+                        },
+                        onFailure = {
+                            showCatalogError()
+                        }
+                    )
+                }
+        }
+    }
+
+    private fun showCatalogError() {
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                errorMessage =
+                    "No se pudo cargar el catálogo. " +
+                            "Revisa tu conexión e intenta nuevamente."
+            )
+        }
+    }
+
+    fun getProductById(productId: Int): Product? =
+        _uiState.value.products.find { it.id == productId }
+
+    fun getProducerById(producerId: Int): Producer? =
+        _uiState.value.producers.find { it.id == producerId }
+
+    fun toggleFavorite(productId: Int) {
+        viewModelScope.launch {
+            favoriteMutex.withLock {
+                try {
+                    val favorites =
+                        favoriteRepository.observeFavoriteIds().first()
+
+                    val result = if (productId in favorites) {
+                        favoriteRepository.removeFavorite(productId)
+                    } else {
+                        favoriteRepository.addFavorite(productId)
+                    }
+
+                    result.getOrThrow()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    showOrderMessage("No se pudo actualizar el favorito.")
+                }
             }
         }
     }
 
-    fun getProductById(productId: Int): Product? {
-        return _inMemoryState.value.products.find { it.id == productId }
-    }
-
-    fun getProducerById(producerId: Int): Producer? {
-        return _inMemoryState.value.producers.find { it.id == producerId }
-    }
-
     fun onCatalogOrderChange(order: CatalogOrder) {
         viewModelScope.launch {
-            catalogPreferences.setCatalogOrder(order)
-        return _uiState.value.products.find {
-            it.id == productId
+            preferencesRepository.setCatalogOrder(order).onFailure {
+                showOrderMessage("No se pudo guardar el orden del catálogo.")
+            }
         }
     }
 
-    fun getProducerById(producerId: Int): Producer? {
-        return _uiState.value.producers.find {
-            it.id == producerId
+    private fun isOrderLocked(): Boolean =
+        _orderSendState.value is OrderSendState.Loading ||
+                _orderSendState.value is OrderSendState.Success
+
+    private fun changeLocalOrder(
+        action: suspend () -> Unit
+    ) {
+        if (isOrderLocked()) {
+            showOrderMessage("Espera a que termine la confirmación del pedido.")
+            return
+        }
+
+        viewModelScope.launch {
+            orderMutex.withLock {
+                if (isOrderLocked()) {
+                    showOrderMessage(
+                        "Espera a que termine la confirmación del pedido."
+                    )
+                    return@withLock
+                }
+
+                try {
+                    action()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    showOrderMessage("No se pudo actualizar el pedido.")
+                }
+            }
         }
     }
 
-    // -------------------------
-    // PEDIDO
-    // -------------------------
 
     fun addToOrder(
         productId: Int,
         quantity: Int = 1
     ) {
-
-        val product = getProductById(productId)
-
-        if (product == null) {
-            _inMemoryState.value = _inMemoryState.value.copy(
-            _uiState.value = _uiState.value.copy(
-                orderMessage = "Producto no encontrado"
-            )
-            return
-        }
-
         if (quantity <= 0) {
-            _inMemoryState.value = _inMemoryState.value.copy(
-            _uiState.value = _uiState.value.copy(
-                orderMessage = "La cantidad debe ser mayor a cero"
-            )
-            return
-        }
-
-        val currentItem =
-            uiState.value.orderItems.find { it.productId == productId }
-
-        val newQuantity = (currentItem?.quantity ?: 0) + quantity
-
-        if (newQuantity > product.stock) {
-            _inMemoryState.value = _inMemoryState.value.copy(
-            _uiState.value = _uiState.value.copy(
-                orderMessage = "No hay suficiente stock"
-            )
+            showOrderMessage("Cantidad inválida")
             return
         }
 
         viewModelScope.launch {
-            orderLineDao.upsertOrderLine(
-                OrderLineEntity(productId = productId, quantity = newQuantity)
-            )
-        }
-        val newItems =
-            if (currentItem == null) {
+            orderMutex.withLock {
 
-                _uiState.value.orderItems +
-                        OrderItem(
-                            productId = productId,
-                            quantity = quantity
+                _isReserving.value = true
+
+                try {
+                    val product = getProductById(productId)
+
+                    if (product == null) {
+                        showOrderMessage(
+                            "Producto no encontrado"
+                        )
+                        return@withLock
+                    }
+
+                    val currentItems =
+                        orderRepository.observeOrderItems().first()
+
+                    val currentQuantity =
+                        currentItems.find {
+                            it.productId == productId
+                        }?.quantity ?: 0
+
+                    var reserved = 0
+
+                    for (attempt in 1..quantity) {
+
+                        val result =
+                            stockRepository.reserveUnit(productId)
+
+                        if (result.isFailure) {
+                            break
+                        }
+
+                        reserved++
+                    }
+
+                    if (reserved == 0) {
+                        showOrderMessage(
+                            "No hay existencias disponibles"
+                        )
+                        return@withLock
+                    }
+
+                    try {
+                        orderRepository.upsertItem(
+                            OrderItem(
+                                productId = productId,
+                                quantity = currentQuantity + reserved
+                            )
                         )
 
-            } else {
+                        showOrderMessage(
+                            "$reserved unidad(es) reservada(s)"
+                        )
 
-                _uiState.value.orderItems.map { item ->
+                    } catch (e: Exception) {
 
-                    if (item.productId == productId) {
-                        item.copy(quantity = newQuantity)
-                    } else {
-                        item
+                        repeat(reserved) {
+                            stockRepository.releaseUnit(productId)
+                        }
+
+                        showOrderMessage(
+                            "No se pudo guardar el pedido"
+                        )
                     }
+
+                } finally {
+                    _isReserving.value = false
                 }
             }
-
-        _inMemoryState.value = _inMemoryState.value.copy(
-            orderMessage = "Producto agregado al pedido"
-        )
+        }
     }
 
     fun decreaseOrderItem(productId: Int) {
 
-        val currentItem =
-            uiState.value.orderItems.find { it.productId == productId } ?: return
-
         viewModelScope.launch {
-            if (currentItem.quantity <= 1) {
-                orderLineDao.deleteOrderLine(productId)
-            } else {
-                orderLineDao.upsertOrderLine(
-                    OrderLineEntity(
-                        productId = productId,
-                        quantity = currentItem.quantity - 1
+            orderMutex.withLock {
+
+                val current =
+                    orderRepository.observeOrderItems()
+                        .first()
+                        .find { it.productId == productId }
+                        ?: return@withLock
+
+                val result =
+                    stockRepository.releaseUnit(productId)
+
+                if (result.isFailure) {
+                    showOrderMessage(
+                        "No se pudo devolver la unidad"
                     )
-                )
-
-                _uiState.value.orderItems.map { item ->
-
-                    if (item.productId == productId) {
-                        item.copy(
-                            quantity = item.quantity - 1
-                        )
-                    } else {
-                        item
-                    }
+                    return@withLock
                 }
+
+                if (current.quantity <= 1) {
+                    orderRepository.removeItem(productId)
+                } else {
+                    orderRepository.upsertItem(
+                        current.copy(
+                            quantity = current.quantity - 1
+                        )
+                    )
+                }
+
+                showOrderMessage(
+                    "Unidad devuelta correctamente"
+                )
             }
         }
     }
 
     fun removeFromOrder(productId: Int) {
+
         viewModelScope.launch {
-            orderLineDao.deleteOrderLine(productId)
-        }
+            orderMutex.withLock {
 
-        _uiState.value = _uiState.value.copy(
-            orderItems = _uiState.value.orderItems.filter {
-                it.productId != productId
+                val current =
+                    orderRepository.observeOrderItems()
+                        .first()
+                        .find { it.productId == productId }
+                        ?: return@withLock
+
+                var released = 0
+
+                repeat(current.quantity) {
+                    val result =
+                        stockRepository.releaseUnit(productId)
+
+                    if (result.isSuccess) {
+                        released++
+                    }
+                }
+
+                if (released == 0) {
+                    showOrderMessage(
+                        "No se pudieron devolver unidades"
+                    )
+                    return@withLock
+                }
+
+                val remaining =
+                    current.quantity - released
+
+                if (remaining == 0) {
+                    orderRepository.removeItem(productId)
+                } else {
+                    orderRepository.upsertItem(
+                        current.copy(quantity = remaining)
+                    )
+                }
+
+                showOrderMessage(
+                    "$released unidad(es) devuelta(s)"
+                )
             }
-        )
+        }
     }
-
-    fun clearOrderMessage() {
-        _inMemoryState.value = _inMemoryState.value.copy(orderMessage = null)
-    }
-
-
 
     fun onFullNameChange(value: String) {
-        _checkoutUiState.value = _checkoutUiState.value.copy(
-            fullName = value,
-            fullNameTouched = true
-        )
+        _checkoutUiState.update {
+            it.copy(fullName = value, fullNameTouched = true)
+        }
     }
 
     fun onPhoneChange(value: String) {
-        _checkoutUiState.value = _checkoutUiState.value.copy(
-            phone = value,
-            phoneTouched = true
-        )
+        _checkoutUiState.update {
+            it.copy(phone = value, phoneTouched = true)
+        }
     }
 
     fun onNitChange(value: String) {
-        _checkoutUiState.value = _checkoutUiState.value.copy(
-            nit = value,
-            nitTouched = true
-        )
+        _checkoutUiState.update {
+            it.copy(nit = value, nitTouched = true)
+        }
     }
 
     fun onBusinessNameChange(value: String) {
-        _checkoutUiState.value = _checkoutUiState.value.copy(
-            businessName = value,
-            businessNameTouched = true
-        )
+        _checkoutUiState.update {
+            it.copy(businessName = value, businessNameTouched = true)
+        }
     }
 
     fun onBillingTypeChange(billingType: BillingType) {
-
-    fun onBillingTypeChange(billingType: BillingType) {
-        _checkoutUiState.value =
+        _checkoutUiState.update {
             if (billingType == BillingType.CF) {
-                _checkoutUiState.value.copy(
+                it.copy(
                     billingType = BillingType.CF,
                     nit = "",
                     businessName = "",
@@ -348,185 +479,119 @@ class StoreViewModel(
                     businessNameTouched = false
                 )
             } else {
-                _checkoutUiState.value.copy(billingType = BillingType.NIT)
+                it.copy(billingType = BillingType.NIT)
             }
+        }
     }
 
     fun onPaymentMethodChange(paymentMethod: PaymentMethod) {
-        _checkoutUiState.value = _checkoutUiState.value.copy(
-            paymentMethod = paymentMethod
-        )
-    fun onPaymentMethodChange(
-        paymentMethod: PaymentMethod
-    ) {
-        _checkoutUiState.value =
-            _checkoutUiState.value.copy(
-                paymentMethod = paymentMethod
-            )
+        _checkoutUiState.update {
+            it.copy(paymentMethod = paymentMethod)
+        }
     }
 
     fun isCheckoutFormValid(): Boolean =
         _checkoutUiState.value.isFormValid
 
-    fun confirmOrder(): Boolean {
-
-        val checkout = _checkoutUiState.value
-        val orderItems = uiState.value.orderItems
-
-        if (!isCheckoutFormValid() || orderItems.isEmpty()) {
-            return false
-        }
-
-        val total = calculateOrderTotal(
-            orderItems = orderItems,
-            products = uiState.value.products
-        )
-
-        val folio = "#ORD-" + nextOrderNumber.toString().padStart(5, '0')
-        nextOrderNumber++
-
-        _orderReceipt.value = OrderReceipt(
-            folio = folio,
-            customerName = checkout.fullName.trim(),
-            billingType = checkout.billingType,
-            paymentMethod = checkout.paymentMethod,
-            total = total
-        )
-
-        viewModelScope.launch {
-            orderLineDao.clearOrder()
-        }
-
-        _inMemoryState.value = _inMemoryState.value.copy(orderMessage = null)
-    // -------------------------
-    // LAB 13 - ENVIO REMOTO
-    // -------------------------
-
     fun sendOrder() {
-
-        // Evitar doble envio.
-        if (
-            _orderSendState.value is OrderSendState.Loading ||
-            _orderSendState.value is OrderSendState.Success
-        ) {
+        if (isOrderLocked()) {
             return
         }
 
         val checkout = _checkoutUiState.value
-        val currentState = _uiState.value
-        val orderItems = currentState.orderItems
 
-        if (!checkout.isFormValid || orderItems.isEmpty()) {
+        if (!checkout.isFormValid) {
             _orderSendState.value = OrderSendState.Error(
-                "Completa los datos obligatorios y revisa tu pedido."
+                "Completa los datos obligatorios."
             )
             return
         }
-
-        val productsById =
-            currentState.products.associateBy { it.id }
-
-        val validOrder = orderItems.all { item ->
-            val product = productsById[item.productId]
-
-            product != null &&
-                    item.quantity > 0 &&
-                    item.quantity <= product.stock
-        }
-
-        if (!validOrder) {
-            _orderSendState.value = OrderSendState.Error(
-                "El pedido contiene cantidades no disponibles."
-            )
-            return
-        }
-
-        val lines = orderItems.map { item ->
-
-            val product =
-                requireNotNull(productsById[item.productId])
-
-            OrderLineDto(
-                productId = product.id,
-                productName = product.name,
-                unitPrice = product.price,
-                quantity = item.quantity
-            )
-        }
-
-        val total = calculateOrderTotal(
-            orderItems = orderItems,
-            products = currentState.products
-        )
-
-        val request = CreateOrderDto(
-            customerName = checkout.fullName.trim(),
-            total = total,
-            createdAt = Instant.now().toString(),
-            lines = lines
-        )
 
         _orderSendState.value = OrderSendState.Loading
 
         viewModelScope.launch {
+            orderMutex.withLock {
+                try {
+                    val items = orderRepository.observeOrderItems().first()
 
-            try {
+                    if (items.isEmpty()) {
+                        _orderSendState.value = OrderSendState.Error(
+                            "El pedido está vacío."
+                        )
+                        return@withLock
+                    }
 
-                val savedOrder =
-                    RetrofitProvider.orderApi.createOrder(
-                        request
+                    val products = _uiState.value.products
+                    val productsById = products.associateBy { it.id }
+
+
+                    val valid = items.all { item ->
+                        productsById[item.productId] != null &&
+                                item.quantity > 0
+                    }
+
+                    if (!valid) {
+                        _orderSendState.value =
+                            OrderSendState.Error(
+                                "El pedido contiene productos inválidos"
+                            )
+                        return@launch
+                    }
+
+                    val lines = items.map { item ->
+                        val product = requireNotNull(
+                            productsById[item.productId]
+                        )
+
+                        RemoteOrderLine(
+                            productId = product.id,
+                            productName = product.name,
+                            unitPrice = product.price,
+                            quantity = item.quantity
+                        )
+                    }
+
+                    val request = NewRemoteOrder(
+                        customerName = checkout.fullName.trim(),
+                        total = calculateOrderTotal(
+                            orderItems = items,
+                            products = products
+                        ),
+                        createdAt = Instant.now().toString(),
+                        lines = lines
                     )
 
-                // Guardar recibo del servidor.
-                _orderReceipt.value = OrderReceipt(
-                    folio = "#${savedOrder.id}",
-                    customerName = savedOrder.customerName,
-                    billingType = checkout.billingType,
-                    paymentMethod = checkout.paymentMethod,
-                    total = savedOrder.total
-                )
+                    val savedOrder = remoteOrdersRepository
+                        .createOrder(request)
+                        .getOrThrow()
 
-                // Vaciar solamente tras el exito.
-                _uiState.value = _uiState.value.copy(
-                    orderItems = emptyList(),
-                    orderMessage = null
-                )
+                    _orderReceipt.value = OrderReceipt(
+                        folio = "#${savedOrder.id}",
+                        customerName = savedOrder.customerName,
+                        billingType = checkout.billingType,
+                        paymentMethod = checkout.paymentMethod,
+                        total = savedOrder.total
+                    )
 
-                resetCheckout()
+                    orderRepository.clearOrder().getOrThrow()
+                    clearOrderMessage()
+                    resetCheckout()
 
-                _orderSendState.value =
-                    OrderSendState.Success(savedOrder)
-
-            } catch (e: CancellationException) {
-                throw e
-
-            } catch (e: IOException) {
-
-                _orderSendState.value = OrderSendState.Error(
-                    "No pudimos conectar con el servidor. Revisa tu conexión."
-                )
-
-            } catch (e: HttpException) {
-
-                _orderSendState.value = OrderSendState.Error(
-                    when (e.code()) {
-                        400 -> "No se pudo registrar el pedido."
-                        404 -> "El servicio de pedidos no está disponible."
-                        else -> "El servidor no pudo procesar el pedido."
-                    }
-                )
-
-            } catch (e: SerializationException) {
-
-                _orderSendState.value = OrderSendState.Error(
-                    "Recibimos una respuesta inesperada del servidor."
-                )
+                    _orderSendState.value =
+                        OrderSendState.Success(savedOrder)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _orderSendState.value = OrderSendState.Error(
+                        "No se pudo completar el proceso del pedido. " +
+                                "Consulta Mis pedidos antes de volver a enviarlo."
+                    )
+                }
             }
         }
     }
 
     fun resetOrderSendState() {
-
         if (_orderSendState.value !is OrderSendState.Loading) {
             _orderSendState.value = OrderSendState.Idle
         }
@@ -534,5 +599,90 @@ class StoreViewModel(
 
     private fun resetCheckout() {
         _checkoutUiState.value = CheckoutUiState()
+    }
+
+    companion object {
+        val Factory: ViewModelProvider.Factory = viewModelFactory {
+            initializer {
+                val application =
+                    checkNotNull(this[APPLICATION_KEY]) as StoreApplication
+
+                val container = application.container
+
+                StoreViewModel(
+                    productRepository = container.productRepository,
+                    producerRepository = container.producerRepository,
+                    favoriteRepository = container.favoriteRepository,
+                    orderRepository = container.orderRepository,
+                    preferencesRepository = container.preferencesRepository,
+                    remoteOrdersRepository = container.remoteOrdersRepository,
+                    stockRepository = container.stockRepository
+                )
+            }
+        }
+    }
+
+    private val _concurrencyTestState =
+        MutableStateFlow<ConcurrencyTestState>(
+            ConcurrencyTestState.Idle
+        )
+
+    val concurrencyTestState:
+            StateFlow<ConcurrencyTestState> =
+        _concurrencyTestState
+
+    fun onConcurrencyTest(
+        productId: Int,
+        attempts: Int = 20
+    ) {
+        if (_concurrencyTestState.value is ConcurrencyTestState.Running) {
+            return
+        }
+
+        if (attempts <= 0) {
+            _concurrencyTestState.value =
+                ConcurrencyTestState.Error(
+                    "La cantidad de intentos debe ser positiva"
+                )
+            return
+        }
+
+        _concurrencyTestState.value =
+            ConcurrencyTestState.Running
+
+        viewModelScope.launch {
+
+            try {
+
+                val results = supervisorScope {
+
+                    List(attempts) {
+                        async {
+                            stockRepository.reserveUnit(productId)
+                        }
+                    }.awaitAll()
+                }
+
+                val successes =
+                    results.count { it.isSuccess }
+
+                _concurrencyTestState.value =
+                    ConcurrencyTestState.Completed(
+                        attempts = attempts,
+                        successes = successes,
+                        rejections = attempts - successes
+                    )
+
+            } catch (e: CancellationException) {
+                throw e
+
+            } catch (e: Exception) {
+
+                _concurrencyTestState.value =
+                    ConcurrencyTestState.Error(
+                        "No se pudo completar la prueba"
+                    )
+            }
+        }
     }
 }
