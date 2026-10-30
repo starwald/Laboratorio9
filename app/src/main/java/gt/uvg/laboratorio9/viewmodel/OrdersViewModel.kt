@@ -1,29 +1,27 @@
-
 package gt.uvg.laboratorio9.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
-import gt.uvg.laboratorio9.network.RetrofitProvider
-import kotlinx.coroutines.CancellationException
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import gt.uvg.laboratorio9.StoreApplication
+import gt.uvg.laboratorio9.repository.RemoteOrdersRepository
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerializationException
-import retrofit2.HttpException
-import java.io.IOException
 
-class OrdersViewModel : ViewModel() {
+class OrdersViewModel(
+    private val repository: RemoteOrdersRepository
+) : ViewModel() {
 
     private val _uiState =
-        MutableStateFlow<OrdersUiState>(
-            OrdersUiState.Idle
-        )
+        MutableStateFlow<OrdersUiState>(OrdersUiState.Idle)
 
-    val uiState: StateFlow<OrdersUiState> =
-        _uiState
+    val uiState = _uiState.asStateFlow()
 
     fun loadOrders() {
-
         if (_uiState.value is OrdersUiState.Loading) {
             return
         }
@@ -31,35 +29,32 @@ class OrdersViewModel : ViewModel() {
         _uiState.value = OrdersUiState.Loading
 
         viewModelScope.launch {
-            try {
-
-                val orders = RetrofitProvider.orderApi.getOrders(
-                    sortBy = "createdAt",
-                    order = "desc"
-                )
-
-                _uiState.value = if (orders.isEmpty()) {
-                    OrdersUiState.Empty
-                } else {
-                    OrdersUiState.Success(orders)
+            repository.getOrders().fold(
+                onSuccess = { orders ->
+                    _uiState.value = if (orders.isEmpty()) {
+                        OrdersUiState.Empty
+                    } else {
+                        OrdersUiState.Success(orders)
+                    }
+                },
+                onFailure = {
+                    _uiState.value = OrdersUiState.Error(
+                        "No pudimos cargar los pedidos. " +
+                                "Revisa tu conexión e intenta nuevamente."
+                    )
                 }
+            )
+        }
+    }
 
-            } catch (e: CancellationException) {
-                throw e
+    companion object {
+        val Factory: ViewModelProvider.Factory = viewModelFactory {
+            initializer {
+                val application =
+                    checkNotNull(this[APPLICATION_KEY]) as StoreApplication
 
-            } catch (e: IOException) {
-                _uiState.value = OrdersUiState.Error(
-                    "No pudimos conectar con el servidor. Revisa tu conexión."
-                )
-
-            } catch (e: HttpException) {
-                _uiState.value = OrdersUiState.Error(
-                    "No pudimos consultar los pedidos. Intenta nuevamente."
-                )
-
-            } catch (e: SerializationException) {
-                _uiState.value = OrdersUiState.Error(
-                    "Recibimos una respuesta inesperada del servidor."
+                OrdersViewModel(
+                    repository = application.container.remoteOrdersRepository
                 )
             }
         }

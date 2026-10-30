@@ -1,7 +1,6 @@
-
 package gt.uvg.laboratorio9.viewmodel
 
-import gt.uvg.laboratorio9.network.dto.OrderDto
+import gt.uvg.laboratorio9.model.RemoteOrder
 
 sealed interface OrdersUiState {
 
@@ -12,7 +11,7 @@ sealed interface OrdersUiState {
     data object Empty : OrdersUiState
 
     data class Success(
-        val orders: List<OrderDto>
+        val orders: List<RemoteOrder>
     ) : OrdersUiState
 
     data class Error(

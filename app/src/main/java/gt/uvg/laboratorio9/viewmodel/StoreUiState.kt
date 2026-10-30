@@ -11,5 +11,7 @@ data class StoreUiState(
     val favoriteProductIds: Set<Int> = emptySet(),
     val orderItems: List<OrderItem> = emptyList(),
     val orderMessage: String? = null,
-    val catalogOrder: CatalogOrder = CatalogOrder.NAME
+    val catalogOrder: CatalogOrder = CatalogOrder.NAME,
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
 )
