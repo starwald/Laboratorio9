@@ -77,6 +77,10 @@ fun StoreApp() {
 
     val orderUnitCount = uiState.orderItems.sumOf { it.quantity }
 
+    val concurrencyTestState by
+    storeViewModel.concurrencyTestState
+        .collectAsStateWithLifecycle()
+
     LaunchedEffect(orderSendState) {
         if (
             orderSendState is OrderSendState.Success &&
@@ -153,6 +157,13 @@ fun StoreApp() {
                             product.id in uiState.favoriteProductIds,
                         orderMessage = uiState.orderMessage,
                         orderUnitCount = orderUnitCount,
+                        concurrencyTestState = concurrencyTestState,
+                        onConcurrencyTest = {
+                            storeViewModel.onConcurrencyTest(
+                                productId = product.id,
+                                attempts = 20
+                            )
+                        },
                         onFavoriteClick = {
                             storeViewModel.toggleFavorite(product.id)
                         },
