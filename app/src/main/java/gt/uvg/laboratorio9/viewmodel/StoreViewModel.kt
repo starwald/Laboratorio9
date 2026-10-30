@@ -37,6 +37,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import gt.uvg.laboratorio9.repository.StockRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.supervisorScope
+import kotlin.collections.all
 
 class StoreViewModel(
     private val productRepository: ProductRepository,
@@ -44,7 +50,8 @@ class StoreViewModel(
     private val favoriteRepository: FavoriteRepository,
     private val orderRepository: OrderRepository,
     private val preferencesRepository: PreferencesRepository,
-    private val remoteOrdersRepository: RemoteOrdersRepository
+    private val remoteOrdersRepository: RemoteOrdersRepository,
+    private val stockRepository: StockRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -71,6 +78,17 @@ class StoreViewModel(
     init {
         observeLocalData()
         retryCatalog()
+    }
+
+    private val _isReserving = MutableStateFlow(false)
+    val isReserving: StateFlow<Boolean> = _isReserving
+
+    private fun showOrderMessage(message: String?) {
+        _uiState.update { it.copy(orderMessage = message) }
+    }
+
+    fun clearOrderMessage() {
+        _uiState.update { it.copy(orderMessage = null) }
     }
 
     private fun observeLocalData() {
@@ -257,75 +275,173 @@ class StoreViewModel(
         }
     }
 
+
     fun addToOrder(
         productId: Int,
         quantity: Int = 1
     ) {
         if (quantity <= 0) {
-            showOrderMessage("La cantidad debe ser mayor a cero.")
+            showOrderMessage("Cantidad inválida")
             return
         }
 
-        changeLocalOrder {
-            val product = getProductById(productId)
+        viewModelScope.launch {
+            orderMutex.withLock {
 
-            if (product == null) {
-                showOrderMessage("Producto no encontrado.")
-                return@changeLocalOrder
+                _isReserving.value = true
+
+                try {
+                    val product = getProductById(productId)
+
+                    if (product == null) {
+                        showOrderMessage(
+                            "Producto no encontrado"
+                        )
+                        return@withLock
+                    }
+
+                    val currentItems =
+                        orderRepository.observeOrderItems().first()
+
+                    val currentQuantity =
+                        currentItems.find {
+                            it.productId == productId
+                        }?.quantity ?: 0
+
+                    var reserved = 0
+
+                    for (attempt in 1..quantity) {
+
+                        val result =
+                            stockRepository.reserveUnit(productId)
+
+                        if (result.isFailure) {
+                            break
+                        }
+
+                        reserved++
+                    }
+
+                    if (reserved == 0) {
+                        showOrderMessage(
+                            "No hay existencias disponibles"
+                        )
+                        return@withLock
+                    }
+
+                    try {
+                        orderRepository.upsertItem(
+                            OrderItem(
+                                productId = productId,
+                                quantity = currentQuantity + reserved
+                            )
+                        )
+
+                        showOrderMessage(
+                            "$reserved unidad(es) reservada(s)"
+                        )
+
+                    } catch (e: Exception) {
+
+                        repeat(reserved) {
+                            stockRepository.releaseUnit(productId)
+                        }
+
+                        showOrderMessage(
+                            "No se pudo guardar el pedido"
+                        )
+                    }
+
+                } finally {
+                    _isReserving.value = false
+                }
             }
-
-            val items = orderRepository.observeOrderItems().first()
-            val currentQuantity = items.find {
-                it.productId == productId
-            }?.quantity ?: 0
-
-            if (quantity > product.stock - currentQuantity) {
-                showOrderMessage("No hay suficiente stock.")
-                return@changeLocalOrder
-            }
-
-            orderRepository.upsertItem(
-                OrderItem(
-                    productId = productId,
-                    quantity = currentQuantity + quantity
-                )
-            ).getOrThrow()
-
-            showOrderMessage("Producto agregado al pedido.")
         }
     }
 
     fun decreaseOrderItem(productId: Int) {
-        changeLocalOrder {
-            val currentItem = orderRepository.observeOrderItems()
-                .first()
-                .find { it.productId == productId }
-                ?: return@changeLocalOrder
 
-            val result = if (currentItem.quantity <= 1) {
-                orderRepository.removeItem(productId)
-            } else {
-                orderRepository.upsertItem(
-                    currentItem.copy(quantity = currentItem.quantity - 1)
+        viewModelScope.launch {
+            orderMutex.withLock {
+
+                val current =
+                    orderRepository.observeOrderItems()
+                        .first()
+                        .find { it.productId == productId }
+                        ?: return@withLock
+
+                val result =
+                    stockRepository.releaseUnit(productId)
+
+                if (result.isFailure) {
+                    showOrderMessage(
+                        "No se pudo devolver la unidad"
+                    )
+                    return@withLock
+                }
+
+                if (current.quantity <= 1) {
+                    orderRepository.removeItem(productId)
+                } else {
+                    orderRepository.upsertItem(
+                        current.copy(
+                            quantity = current.quantity - 1
+                        )
+                    )
+                }
+
+                showOrderMessage(
+                    "Unidad devuelta correctamente"
                 )
             }
-
-            result.getOrThrow()
         }
     }
 
     fun removeFromOrder(productId: Int) {
-        changeLocalOrder {
-            orderRepository.removeItem(productId).getOrThrow()
+
+        viewModelScope.launch {
+            orderMutex.withLock {
+
+                val current =
+                    orderRepository.observeOrderItems()
+                        .first()
+                        .find { it.productId == productId }
+                        ?: return@withLock
+
+                var released = 0
+
+                repeat(current.quantity) {
+                    val result =
+                        stockRepository.releaseUnit(productId)
+
+                    if (result.isSuccess) {
+                        released++
+                    }
+                }
+
+                if (released == 0) {
+                    showOrderMessage(
+                        "No se pudieron devolver unidades"
+                    )
+                    return@withLock
+                }
+
+                val remaining =
+                    current.quantity - released
+
+                if (remaining == 0) {
+                    orderRepository.removeItem(productId)
+                } else {
+                    orderRepository.upsertItem(
+                        current.copy(quantity = remaining)
+                    )
+                }
+
+                showOrderMessage(
+                    "$released unidad(es) devuelta(s)"
+                )
+            }
         }
-    }
-
-    private fun showOrderMessage(message: String) {
-        _uiState.update { it.copy(orderMessage = message) }
-    }
-
-    fun clearOrderMessage() {
-        _uiState.update { it.copy(orderMessage = null) }
     }
 
     fun onFullNameChange(value: String) {
@@ -408,19 +524,18 @@ class StoreViewModel(
                     val products = _uiState.value.products
                     val productsById = products.associateBy { it.id }
 
-                    val validOrder = items.all { item ->
-                        val product = productsById[item.productId]
 
-                        product != null &&
-                                item.quantity > 0 &&
-                                item.quantity <= product.stock
+                    val valid = items.all { item ->
+                        productsById[item.productId] != null &&
+                                item.quantity > 0
                     }
 
-                    if (!validOrder) {
-                        _orderSendState.value = OrderSendState.Error(
-                            "El pedido contiene cantidades no disponibles."
-                        )
-                        return@withLock
+                    if (!valid) {
+                        _orderSendState.value =
+                            OrderSendState.Error(
+                                "El pedido contiene productos inválidos"
+                            )
+                        return@launch
                     }
 
                     val lines = items.map { item ->
@@ -500,8 +615,73 @@ class StoreViewModel(
                     favoriteRepository = container.favoriteRepository,
                     orderRepository = container.orderRepository,
                     preferencesRepository = container.preferencesRepository,
-                    remoteOrdersRepository = container.remoteOrdersRepository
+                    remoteOrdersRepository = container.remoteOrdersRepository,
+                    stockRepository = container.stockRepository
                 )
+            }
+        }
+    }
+
+    private val _concurrencyTestState =
+        MutableStateFlow<ConcurrencyTestState>(
+            ConcurrencyTestState.Idle
+        )
+
+    val concurrencyTestState:
+            StateFlow<ConcurrencyTestState> =
+        _concurrencyTestState
+
+    fun onConcurrencyTest(
+        productId: Int,
+        attempts: Int = 20
+    ) {
+        if (_concurrencyTestState.value is ConcurrencyTestState.Running) {
+            return
+        }
+
+        if (attempts <= 0) {
+            _concurrencyTestState.value =
+                ConcurrencyTestState.Error(
+                    "La cantidad de intentos debe ser positiva"
+                )
+            return
+        }
+
+        _concurrencyTestState.value =
+            ConcurrencyTestState.Running
+
+        viewModelScope.launch {
+
+            try {
+
+                val results = supervisorScope {
+
+                    List(attempts) {
+                        async {
+                            stockRepository.reserveUnit(productId)
+                        }
+                    }.awaitAll()
+                }
+
+                val successes =
+                    results.count { it.isSuccess }
+
+                _concurrencyTestState.value =
+                    ConcurrencyTestState.Completed(
+                        attempts = attempts,
+                        successes = successes,
+                        rejections = attempts - successes
+                    )
+
+            } catch (e: CancellationException) {
+                throw e
+
+            } catch (e: Exception) {
+
+                _concurrencyTestState.value =
+                    ConcurrencyTestState.Error(
+                        "No se pudo completar la prueba"
+                    )
             }
         }
     }

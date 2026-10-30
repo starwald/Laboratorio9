@@ -10,6 +10,7 @@ import gt.uvg.laboratorio9.data.local.StoreDatabaseProvider
 import gt.uvg.laboratorio9.network.RetrofitProvider
 import gt.uvg.laboratorio9.repository.AuthRepository
 import gt.uvg.laboratorio9.repository.FavoriteRepository
+import gt.uvg.laboratorio9.repository.FirestoreStockRepository
 import gt.uvg.laboratorio9.repository.OrderRepository
 import gt.uvg.laboratorio9.repository.PreferencesRepository
 import gt.uvg.laboratorio9.repository.ProductRepository
@@ -22,6 +23,7 @@ import gt.uvg.laboratorio9.repository.impl.RoomFavoriteRepository
 import gt.uvg.laboratorio9.repository.impl.RoomOrderRepository
 import gt.uvg.laboratorio9.repository.ProducerRepository
 import gt.uvg.laboratorio9.repository.impl.LocalProducerRepository
+import gt.uvg.laboratorio9.repository.StockRepository
 class AppContainer(context: Context) {
 
     private val appContext = context.applicationContext
@@ -75,5 +77,9 @@ class AppContainer(context: Context) {
 
     val producerRepository: ProducerRepository by lazy {
         LocalProducerRepository()
+    }
+
+    val stockRepository: StockRepository by lazy {
+        FirestoreStockRepository(firestore)
     }
 }
